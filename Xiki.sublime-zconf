@@ -1,0 +1,60 @@
+//=
+// Have Xiki Commands and Keys available in this buffer.
+//
+xiki = false
+
+//=
+// Use double click to run command
+//
+xiki_double_click = false
+
+//=
+// Maximum lines of a file, which should be displayed.
+//
+xiki_max_display_lines = 1000
+
+//=
+// Turn on, if you need the exception tracebacks for debugging
+//
+xiki_traceback = false
+
+//=
+// Xiki User Menu Base directory
+//
+xiki_user_base_directory = "Packages/User/Xiki"
+
+//=
+// Xiki System Menu Base directory
+//
+xiki_base_directory = "Packages/Xiki/base"
+
+//
+// File extensions, xiki is reading
+//
+xiki_file_extensions = ["rst", "xiki"]
+
+[(Windows)]
+//=
+// Opens a non-text file.
+//
+xiki_opener = start
+
+[(OSX)]
+//=
+// Opens a non-text file.
+//
+xiki_opener = open
+
+[(Linux)]
+//=
+// Opens a non-text file.
+//
+xiki_opener = xdg-open
+
+[]
+
+ctrl+enter [
+  setting.xiki == true
+  ] :: xiki
+
+Xiki IDE :: xiki_ide

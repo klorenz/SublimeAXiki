@@ -1,0 +1,6 @@
+{
+    //=
+    // Opens a non-text file.
+    //
+    "xiki_opener": "xdg-open"
+}

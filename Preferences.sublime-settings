@@ -1,0 +1,36 @@
+{
+    //=
+    // Use double click to run command
+    //
+    "xiki_double_click": false, 
+    //=
+    // Xiki User Menu Base directory
+    //
+    "xiki_user_base_directory": "Packages/User/Xiki", 
+    //
+    // File extensions, xiki is reading
+    //
+    "xiki_file_extensions": [
+        "rst", 
+    //=
+    // Have Xiki Commands and Keys available in this buffer.
+    //
+        "xiki"
+    ], 
+    //=
+    // Xiki System Menu Base directory
+    //
+    "xiki_base_directory": "Packages/Xiki/base", 
+    //=
+    // Maximum lines of a file, which should be displayed.
+    //
+    "xiki_max_display_lines": 1000, 
+    //=
+    // Turn on, if you need the exception tracebacks for debugging
+    //
+    "xiki_traceback": false, 
+    //=
+    // Have Xiki Commands and Keys available in this buffer.
+    //
+    "xiki": false
+}

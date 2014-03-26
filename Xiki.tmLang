@@ -1,0 +1,81 @@
+uuid: AF8D3707-011E-11E2-9804-705681C14B6F
+name: Xiki
+fileTypes: <xiki>
+scopeName: xiki
+
+# foldingStartMarker: ^\s*(\>+)
+# foldingEndMarker  : ^\s*(?=\>+)
+
+
+
+MAIN
+	storage.type.class.menu.xiki
+		^(?=(\w+/)+$)
+		$
+
+		keyword.operator.menu.separator.xiki
+			/
+
+	<storage.type.class.menu.xiki>
+		^\s*([+\-])\s(?=([^/]*/)+$)
+		1: keyword.operator.expand.xiki
+		$
+
+		keyword.operator.menu.separator.xiki
+			/
+
+	meta.output.xiki
+		^\s*(\|)
+		1: keyword.operator.output.wiki
+
+	<markup.heading.xiki>
+		^\s*(>+)\s+
+		1: keyword.operator.heading.xiki
+		$
+
+	meta.command.xiki
+		^\s*(\$\$?)\s
+		$
+
+		#shell
+
+	meta.expand.xiki
+		^\s*([+\-])\s
+		1: keyword.operator.expand.xiki
+
+	meta.base.xiki
+		^\s*(@)
+		1: keyword.operator.base.xiki
+
+	comment.operator.path.escape
+		^\s*(\\)(?=[\\$+\-])
+
+shell
+	support.function.builtin.xiki
+		(?x) (?<=[\s\(])\b(?: for | in | do | done | while | if | then |
+			| fi | elif | read | echo | case | esac | exit | die | printf
+			)\b
+
+	keyword.operator.xiki
+		(?x) (?: \;\; | \; | \[\[ | \]\] | \&\& | \|\| | \! | > | < | & | \| )
+
+	support.function.xiki
+		(?x) (?<=[\s\(])\b(?: cp | mv | rm | cat | ls | \[ | \] | find | grep | awk | perl | mkdir 
+			| rmdir | cd | cwd | pwd | svn | git | hg | scp | make | ps 
+			| sed | python | ruby
+			)\b
+
+	entity.other.attribute-name.xiki
+		(?x) (?<=\s)(?: \-[\w\-]+ )
+
+	punctuation.separator.continuation.xiki
+		\\\n
+
+	#variable
+
+variable
+	support.variable.shell
+		(\$)\w+|(\$\{)\w+(\})
+		1: keyword.operator.variable.xiki
+		2: keyword.operator.variable.xiki
+		3: keyword.operator.variable.xiki

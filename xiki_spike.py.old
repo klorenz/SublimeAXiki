@@ -1,0 +1,518 @@
+# vim:fileencoding=utf-8:
+'''
+xiki.py - a Xiki Clone
+======================
+
+This is a very simple xiki clone.  It has following features::
+'''
+
+try:
+	import SocketServer as socketserver
+except ImportError:
+	import socketserver
+
+import json, re, sys, os
+
+INDENT_RE = re.compile('^\s*')
+
+LINE_RE = re.compile(r'''(?x)
+	^
+	(?P<indent>\s*)
+	(?:(?P<indicator>[+\-|@]|>+|\w*$|<<)\x20)?
+	(?P<line>.*)
+	$
+	''')
+
+MENU_DIR = os.path.join(os.path.dirname(__file__), 'menu')
+
+class XikiText:
+	def __init__(self, lines=None, filename=None):
+		self.filename   = filename
+		self.lines      = lines
+		self.min_indent = None
+		self.parsed     = None
+
+		self.parse_xikifile()
+
+	def __iter__(self):
+		for x in self.parsed:
+			yield x
+
+	def parse_xikifile(self):
+		if not self.lines:
+			with open(self.filename, 'r') as fh:
+				self.lines = fh.readlines()
+
+		lines = self.lines
+		line_no = 0
+		indentation = ['']
+
+		parsed = []
+
+		min_level = 10
+		min_indent = None
+
+		# parse lines
+		for line_no, line in enumerate(lines):
+			line = line.rstrip()
+
+			d = {'line_no': line_no}
+
+			if not line:
+				d.update({'indent': '', 'indicator': None, 'line': ''})
+				parsed.append(d)
+				continue
+
+			m = LINE_RE.match(line)
+			d.update(m.groupdict())
+			# TODO: replace tabs with spaces??
+
+			if min_indent is None or len(d['indent']) < len(min_indent):
+				min_indent = d['indent']
+
+			if indentation[-1] != d['indent']:
+				if len(d['indent']) > len(indentation[-1]):
+					indentation.append(d['indent'])
+				else:
+					while len(d['indent']) < len(indentation[-1]):
+						indentation.pop()
+
+			d['level'] = level = len(indentation)
+			if level < min_level:
+				min_level = level
+
+			indicator = d['indicator']
+			if indicator:
+				if indicator.endswith('$'):
+					d['shell'] = indicator[:-1]
+					d['indicator'] = '$'
+
+			if d['level'] >= min_level and not d['indicator']:
+				d['indicator'] = '@'
+
+			parsed.append(d)
+
+		#sys.stderr.write("x: %s\n" % min_level)
+
+		# update levels of empty lines
+		level = 0
+		for i in reversed(range(len(parsed))):
+			if 'level' not in parsed[i]:
+				parsed[i]['level'] = level
+				continue
+
+			parsed[i]['level'] = level = parsed[i]['level'] - min_level
+
+		self.min_indent = min_indent
+		self.parsed     = parsed
+		return self.parsed
+
+def parse_xikifile(lines, filename=None):
+	return XikiFile(lines=lines, filename=filename).parsed
+
+class XikiNode:
+	def __init__(self, name, parent=None, children=None, nodes=None):
+		self.name     = name
+		self.children = children
+		self.nodes    = nodes
+		self.parent   = parent
+
+		if parent:
+			if name not in parent.nodes:
+				parent.nodes[name] = self
+				parent.children.append(name)
+
+	def ancestors(self):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
+		if self.parent:
+			for p in self.parent.ancestors():
+				yield p
+			yield self.parent
+
+	def __repr__(self):
+		return "/".join([x.name for x in self.ancestors()])+"/"+self.name
+
+	def __getitem__(self, name):
+		name = name.lstrip('/')
+		return self.get_node(name)
+
+	def __iter__(self):
+		for x in self.children:
+			yield x
+
+	def __str__(self):
+		output = []
+		for x in iter(self):
+			if self.has_children(x):
+				output.append("+ %s\n" % x)
+			else:
+				output.append("- %s\n" % x)
+		return ''.join(output)
+
+
+	def has_children(self, name=None):
+		if name:
+			if name in self.nodes:
+				return self.nodes[name].has_children()
+			# if unknown, assume yes
+			return True
+		return self.children or self.nodes
+
+	def splitpath(self, name):
+		if name.startswith('@'):
+			return name, None
+
+		if name.startswith('$'):
+			return name, None
+
+		if '/' not in name:
+			return name, None
+
+		return name.split('/', 1)
+
+	def get_node(self, path):
+		'''
+		:param path:
+			list or tuple of strings, which form a path relative to this
+			node
+		'''
+		name, path = self.splitpath(path)
+
+		if not name:
+			node = self
+
+		elif name == "..":
+			node = self.parent
+
+		elif name not in self.nodes:
+			self._update(name, is_leaf=(not path))
+
+			node = self.nodes[name]
+
+		if not path:
+			return str(node)
+
+		return node.get_node(path)
+
+	def _update(self, name, is_leaf=False):
+		if name.startswith('@'):
+			self.nodes[name] = RefXikiNode(name[1:], parent=self)
+		elif name.startswith('$'):
+			self.nodes[name] = ExecXikiNode(name, parent=self)
+		else:
+			self.update(name, is_leaf)
+
+		self.children.append(name)
+
+class ParsedXikiNode(XikiNode):
+	def __init__(self, name, parsed=None, parent=None, level=0):
+		self.parsed = parsed
+		self.level  = level
+
+		nodes = []
+		for p in self.parsed:
+			if p['level'] == self.level:
+				nodes.append( (p, []) )
+			if p['level'] > self.level:
+				nodes[-1][1].append(p)
+
+		for n in nodes:
+			self.nodes[n[0]['line']] = xiki_factory(*n[1], **n[0])
+
+		print(parsed)
+
+	def _update(self, name, is_leaf=False):
+		for p in self.parsed:
+			if p['level'] == self.level:
+				self.nodes[name] = xiki_factory()
+
+def xiki_factory(*args, **kargs):
+	indicator = kargs.get('indicator')
+	name      = kargs.get('line')
+	if 
+
+
+
+class FuncXikiNode(XikiNode):
+	def get_node(self, path):
+		pass
+
+
+def xikinode(func):
+	return FuncXikiNode(func.__name__, func)
+
+#class RefXikiNode(XikiNode):
+	
+
+#class FuncXikiNode(XikiNode):
+#	def __init__(self, name, function):
+@xikinode
+def help(*args):
+	return '''
+	- general
+	- syntax
+
+
+	'''
+
+
+from itertools import chain
+
+### TODO merged nodes e.g. Files and Directories
+
+class DirXikiNode(XikiNode):
+	'''
+	XikiTree has a root, where a user may write his xiki files and a path
+	where xiki files are searched and merged into xiki tree.
+
+	:param root:
+		root of writable xiki data
+
+	:param path:
+		path of read-only xiki roots
+
+	'''
+
+	def __init__(self, name, root, path=[], parent=None):
+		XikiNode.__init__(self, name, parent=parent)
+
+		self.root = root  # writable
+		self.path = path  # readable
+		self.is_readonly = is_readonly
+
+		self.children = []
+		self.updated  = 0
+
+	def __iter__(self):
+		updated = self.updated
+		self.updated = time.time()
+
+		names = set(self.children)
+
+		for x in chain([self.root], self.path):
+			if updated < os.path.getmtime(x):
+				names.update(os.path.listdir())
+
+		self.children = list(names)
+
+		for x in self.children:
+			yield x
+
+	def update(self, name, is_leaf=False):
+		candidates = []
+
+		for fs_name in (name, name+".xiki", name+".menu"):
+			for p in chain(self.path):
+				p = os.path.join(p, fs_name)
+				if os.path.exists(fs_name):
+					candidates.append(p, fs_name)
+				fs_name = None
+
+		if fs_name is None:
+			self.add_node( name )
+		else:
+			for c in candidates:
+				pass
+			#self.nodes[name] = Dir
+
+
+		fs_name = name
+		if not os.path.exists(fs_name):
+			fs_name = name + ".xiki"
+			if not os.path.exists(fs_name):
+				pass
+
+	def add_node(self, name):
+		pass
+
+class XikiHandler(XikiNode):
+	pass
+
+
+class Xiki:
+
+	def __init__(self, root, path=[]):
+		self.tree = DirXikiNode("", root, path)
+
+	def add_node(self, path, content):
+		#assert that dir of path exists, and that file of path not exists
+		pass
+
+	def __setitem__(self, name, value):
+		self.add_menu(name, value)
+
+	def add_menu(self, path, content):
+		filename = os.path.join(self.root, path) + ".xiki"
+		with open(filename, 'w') as fh:
+			fh.write(content)
+
+	def __getitem__(self, name):
+		return self.tree[name]
+
+
+if __name__ == '__main__':
+	import unittest
+
+	class XikiTest(unittest.TestCase):
+		def test_parse_xiki_file(self):
+			y = [
+				{'indicator': '@', 'line_no': 0, 'indent': '', 
+				 'line': 'foo/bar', 'level': 0}, 
+				{'indicator': '-', 'line_no': 1, 'indent': '  ', 
+				 'line': 'bar', 'level': 1}
+				]
+
+			x = parse_xikifile([
+				"foo/bar",
+				"  - bar"
+				])
+			self.assertEquals(x,y)
+
+			y = [
+				{'indicator': '@', 'line_no': 0, 'indent': '     ', 
+				 'line': 'foo/bar', 'level': 0}, 
+				{'indicator': '-', 'line_no': 1, 'indent': '         ', 
+				 'line': 'bar', 'level': 1}
+				]
+
+			x = parse_xikifile([
+				"     foo/bar",
+				"         - bar"
+				])
+			self.assertEquals(x,y)
+
+		def test_xiki_node(self):
+			r = XikiNode("")
+			y = XikiNode("leaf1", parent=r)
+			z1 = XikiNode("node1", parent=r)
+			z2 = XikiNode("node2", parent=z1)
+			z3 = XikiNode("leaf3", parent=z2)
+
+			self.assertEquals(repr(r), "/")
+
+			self.assertEquals(repr(z3), "/node1/node2/leaf3")
+			self.assertEquals(repr(z1), "/node1")
+			self.assertEquals(str(r), 
+				"- leaf1\n"
+				"+ node1\n")
+
+		def setUp(self):
+			import tempfile
+			self.tempdir = tempfile.mkdtemp('xikitest')
+
+		def tearDown(self):
+			import shutil
+			shutil.rmtree(self.tempdir)
+
+		def test_xiki(self):
+			xiki = Xiki(root=self.tempdir, path=[MENU_DIR])
+			xiki['help']
+
+
+	run_tests = False
+	if len(sys.argv) == 1:
+		run_tests = True
+		argv = [ sys.argv[0] ]
+	if len(sys.argvv) > 1:
+		if sys.argv[1] == '--test':
+			run_tests = True
+			argv = [ sys.argv[0] ] + sys.argv[2:]
+
+	if run_tests:
+		unittest.main(argv=argv)
+		sys.exit(0)
+
+	import argparse
+
+	parser = argparse.ArgumentParser(
+		description = "a very simple xiki clone",
+		epilog = __doc__
+		)
+
+	# common arguments
+
+	parser.add_argument(
+		'-r', '--root',
+		default = "~",
+		help = "root of xiki configuration"
+		)
+
+	parser.add_argument(
+		'-H', '--host',
+		default = "localhost",
+		help =  'host to listen or connect to.  In server mode use "-" to '
+				'communicate over stdio'
+		)
+
+	parser.add_argument(
+		'-p', '--port',
+		default = 31313,
+		help = 'port to listen or connect to.'
+		)
+
+#	group = parser.add_mutually_exclusive_group()
+#	group = parser.add_mutually_exclusive_group()
+
+	# group.add_argument(
+	# 	'xiki-string',
+	# 	default = [],
+	# 	# required = False,
+	# 	action = "append",
+	# 	help = 'a xiki string, if -, read from stdin'
+	# 	)
+
+	group.add_argument(
+		'-l', '--line',
+		default = None,
+		help = "a line to be parsed for a xiki string"
+		)
+
+	group.add_argument(
+		'-s', '--serve',
+		default = False,
+		action = "store_true",
+		help = "run server",
+		)
+
+	args = parser.parse_args()
+
+	if args.serve:
+		if args.host == "-":
+			# read from stdin and write to stdout
+			pass
+
+		else:
+			class MyTCPServer(socketserver.ThreadingTCPServer):
+				allow_reuse_address = True
+
+			class MyTCPServerHandler(socketserver.BaseRequestHandler):
+				def handle(self):
+					try:
+						data = self.request.recv(4096)
+						data = json.loads(data.decode('UTF-8').strip())
+
+						# process the data, i.e. print it:
+						print(data)
+
+						# send some 'ok' back
+						self.request.sendall(bytes(json.dumps({'return':'ok'}), 'UTF-8'))
+					except Exception as e:
+						print("Exception wile receiving message: ", e)
+
+			server = MyTCPServer((args.host, args.port), MyTCPServerHandler)
+			server.serve_forever()
+
+	else:
+		import socket
+		import json
+
+		data = {'message':'hello world!', 'test':123.4}
+
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.connect((args.host, args.port))
+		s.send(bytes(json.dumps(data), 'UTF-8'))
+		result = json.loads(s.recv(4096).decode('UTF-8'))
+		print(result)
+		s.close()
+
