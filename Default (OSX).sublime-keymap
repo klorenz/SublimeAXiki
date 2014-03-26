@@ -1,4 +1,0 @@
-[
-	{"keys": ["super+enter"], "command": "xiki", "context": [{"key": "xiki"}]},
-	{"keys": ["super+shift+enter"], "command": "xiki_continue", "context": [{"key": "xiki"}]}
-]

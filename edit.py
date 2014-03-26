@@ -1,9 +1,6 @@
 # edit.py
 # buffer editing for both ST2 and ST3 that "just works"
-
-import inspect
-import sublime
-import sublime_plugin
+import inspect, sublime, sublime_plugin
 
 try:
     sublime.edit_storage
@@ -103,9 +100,13 @@ class Edit:
         else:
             key = str(hash(tuple(self.steps)))
             sublime.edit_storage[key] = self.run
-            view.run_command('apply_edit', {'key': key})
+            view.run_command('xiki_apply_edit', {'key': key})
 
 
-class apply_edit(sublime_plugin.TextCommand):
+class xiki_apply_edit(sublime_plugin.TextCommand):
     def run(self, edit, key):
+        settings = self.view.settings()
+        auto_indent = settings.get('auto_indent')
+        settings.set('auto_indent', False)
         sublime.edit_storage.pop(key)(self.view, edit)
+        settings.set('auto_indent', auto_indent)

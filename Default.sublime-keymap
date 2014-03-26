@@ -1,4 +1,16 @@
 [
-	{"keys": ["ctrl+enter"], "command": "xiki", "context": [{"key": "xiki"}]},
-	{"keys": ["ctrl+shift+enter"], "command": "xiki_continue", "context": [{"key": "xiki"}]}
+    {
+        "context": [
+            {
+                "key": "setting.xiki", 
+                "operand": true, 
+                "operator": "equal"
+            }
+        ], 
+        "keys": [
+            "ctrl+enter"
+        ], 
+        "args": {}, 
+        "command": "xiki"
+    }
 ]

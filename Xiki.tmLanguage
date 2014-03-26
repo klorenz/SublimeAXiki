@@ -12,33 +12,120 @@
 	<array>
 		<dict>
 			<key>begin</key>
-			<string>^(\s*)(\${1,2}).+$</string>
+			<string>^(?=(\w+/)+$)</string>
+			<key>end</key>
+			<string>$</string>
+			<key>name</key>
+			<string>storage.type.class.menu.xiki</string>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>/</string>
+					<key>name</key>
+					<string>keyword.operator.menu.separator.xiki</string>
+				</dict>
+			</array>
+		</dict>
+		<dict>
+			<key>begin</key>
+			<string>^\s*([+\-])\s(?=([^/]*/)+$)</string>
 			<key>beginCaptures</key>
 			<dict>
-				<key>2</key>
+				<key>1</key>
 				<dict>
 					<key>name</key>
-					<string>keyword.operator.shell</string>
+					<string>keyword.operator.expand.xiki</string>
 				</dict>
 			</dict>
 			<key>contentName</key>
-			<string>comment.xiki.command.output</string>
+			<string>storage.type.class.menu.xiki</string>
 			<key>end</key>
-			<string>^(?!\1  )</string>
-			<key>name</key>
-			<string>meta.xiki.command</string>
+			<string>$</string>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>/</string>
+					<key>name</key>
+					<string>keyword.operator.menu.separator.xiki</string>
+				</dict>
+			</array>
 		</dict>
 		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.output.wiki</string>
+				</dict>
+			</dict>
 			<key>match</key>
-			<string>^\s*@</string>
+			<string>^\s*(\|)</string>
 			<key>name</key>
-			<string>keyword.operator.base</string>
+			<string>meta.output.xiki</string>
 		</dict>
 		<dict>
-			<key>match</key>
-			<string>^\s*[+\-]</string>
+			<key>applyEndPatternLast</key>
+			<integer>1</integer>
+			<key>begin</key>
+			<string>^\s*(&gt;+)\s+</string>
+			<key>beginCaptures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.heading.xiki</string>
+				</dict>
+			</dict>
+			<key>contentName</key>
+			<string>markup.heading.xiki</string>
+			<key>end</key>
+			<string>$</string>
+		</dict>
+		<dict>
+			<key>begin</key>
+			<string>^\s*(\$\$?)\s</string>
+			<key>end</key>
+			<string>$</string>
 			<key>name</key>
-			<string>keyword.operator.expand</string>
+			<string>meta.command.xiki</string>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>include</key>
+					<string>#shell</string>
+				</dict>
+			</array>
+		</dict>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.expand.xiki</string>
+				</dict>
+			</dict>
+			<key>match</key>
+			<string>^\s*([+\-])\s</string>
+			<key>name</key>
+			<string>meta.expand.xiki</string>
+		</dict>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.base.xiki</string>
+				</dict>
+			</dict>
+			<key>match</key>
+			<string>^\s*(@)</string>
+			<key>name</key>
+			<string>meta.base.xiki</string>
 		</dict>
 		<dict>
 			<key>match</key>
@@ -47,6 +134,79 @@
 			<string>comment.operator.path.escape</string>
 		</dict>
 	</array>
+	<key>repository</key>
+	<dict>
+		<key>shell</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>(?x) (?&lt;=[\s\(])\b(?: for | in | do | done | while | if | then |
+| fi | elif | read | echo | case | esac | exit | die | printf
+)\b</string>
+					<key>name</key>
+					<string>support.function.builtin.xiki</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>(?x) (?: \;\; | \; | \[\[ | \]\] | \&amp;\&amp; | \|\| | \! | &gt; | &lt; | &amp; | \| )</string>
+					<key>name</key>
+					<string>keyword.operator.xiki</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>(?x) (?&lt;=[\s\(])\b(?: cp | mv | rm | cat | ls | \[ | \] | find | grep | awk | perl | mkdir 
+| rmdir | cd | cwd | pwd | svn | git | hg | scp | make | ps 
+| sed | python | ruby
+)\b</string>
+					<key>name</key>
+					<string>support.function.xiki</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>(?x) (?&lt;=\s)(?: \-[\w\-]+ )</string>
+					<key>name</key>
+					<string>entity.other.attribute-name.xiki</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\\\n</string>
+					<key>name</key>
+					<string>punctuation.separator.continuation.xiki</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#variable</string>
+				</dict>
+			</array>
+		</dict>
+		<key>variable</key>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.variable.xiki</string>
+				</dict>
+				<key>2</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.variable.xiki</string>
+				</dict>
+				<key>3</key>
+				<dict>
+					<key>name</key>
+					<string>keyword.operator.variable.xiki</string>
+				</dict>
+			</dict>
+			<key>match</key>
+			<string>(\$)\w+|(\$\{)\w+(\})</string>
+			<key>name</key>
+			<string>support.variable.shell</string>
+		</dict>
+	</dict>
 	<key>scopeName</key>
 	<string>xiki</string>
 	<key>uuid</key>
