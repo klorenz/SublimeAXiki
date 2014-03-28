@@ -27,21 +27,75 @@ os_walk        = os.walk
 
 INDENT = "  "
 
+class XikiSettings:
+	def __init__(self, xiki):
+		self.xiki = xiki
+		self.settings = {}
+
+	def __getitem__(self, name):
+		return self.settings[name]
+
+	def __setitem__(self, name, value):
+		self.settings[name] = value
+
+	def get(self, name, default=None):
+		try:
+			return self[name]
+		except KeyError:
+			return default
+
+	def set(self, name, value):
+		self[name] = value
+
+	def append(self, name, value):
+		if not name in self.settings:
+			self.settings[name] = []
+		self.settings[name].append(value)
+
 
 class BaseXiki:
 	def __init__(self):
+		import tempfile
 		self.plugins      = {}
 		self.search_paths = {}
 		self.user_root    = None
+		self.cache_dir    = tempfile
 
-	def read_file(self, filename):
+		if platform.system() == 'Windows':
+			self.shell = ['cmd', '/c']
+		else:
+			self.shell = ['bash', '-c']
+
+	def cached_file(self,filename):
+		content = self.read_file(filename)
+
+	def read_file(self, filename, count=None):
+		'''read first count bytes/chars from filename. If you pass no 
+		count, entire content of file is returned'''
+
 		with open(filename, 'r') as f:
-			return f.read()
+			if count is None:
+				return f.read()
+			else:
+				return f.read(count)
 
-	def open_file(self, filename):
+	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None):
+		'''open a file in current environment.  Usually you would here
+		hook in your editor'''
+
 		from .util import os_open, is_text_file
 
-		if is_text_file(filename):
+		if is_text_file(filename, self.read_file(filename, 512)):
+
+			if text_file_opener:
+				r = text_file_opener(filename)
+				if r is not None:
+					return r
+			if opener:
+				r = opener(filename)
+				if r is not None:
+					return r
+
 			def _reader():
 				with open(filename, 'r') as f:
 					for line in f:
@@ -49,6 +103,16 @@ class BaseXiki:
 			return _reader()
 
 		else:
+			if bin_opener:
+				r = bin_opener(filename)
+				if r is not None:
+					return r
+
+			if opener:
+				r = opener(filename)
+				if r is not None:
+					return r
+
 			if platform.system() == 'Linux':
 				os_open(filename, 'xdg-open')
 
@@ -63,30 +127,49 @@ class BaseXiki:
 
 			return None
 
+	def getcwd(self):
+		return os.getcwd()
 
-	def makedirs(self, path):
+	def makedirs(self, *path):
+		'''make all directories in given path'''
+
+		path = os.path.join(*path)
+		if not os.path.isabs(path):
+			path = os.path.join(self.getcwd(), path)
 		return os.makedirs(path)
 
 	def get_project_dirs(self):
+		'''return root project directories. these are only the names, which
+		will be expanded by expand_dir'''
+
 		return []
 
 	def get_system_dirs(self):
+		'''return system directories, these are only the names, wich will be
+		expanded by expand_dir'''
+
 		return []
 
-	def expand_dir(self, name):
+	def expand_dir(self, path):
+		'''expand project and system directory names here'''
 		return None
 
+	def shell_expand(self, path):
+		'''expands ~ and shellvars in current environment'''
+		return os.path.expandvars(os.path.expanduser(path))
+
+	def isdir(self, path):
+		return os.path.isdir(path)
+
 	def listdir(self, dir):
+		'''list directory content without '.' and '..' '''
 		for x in os.listdir(dir):
 			if os.path.isdir(os.path.join(dir, x)):
 				yield x+"/"
 			else:
 				yield x
 
-	def getcwd(self):
-		return os.getcwd()
-
-	def path_exists(self, filepath):
+	def exists(self, filepath):
 		return os_path_exists(filepath)
 
 	def walk(self, root):
@@ -141,7 +224,38 @@ class BaseXiki:
 	def close(self, path, input=None):
 		return XikiPath(path).close(self, input=input)
 
+	def execute(self, *args, **kargs):
+		log.debug("execute args: %s", args)
+		log.info("Executing: %s", cmd_string(args))
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+		if 'cwd' not in kargs:
+			kargs['cwd'] = self.getcwd()
 
+		p = subprocess.Popen( list(args), stdout = subprocess.PIPE, **kargs )
+
+		for line in iter(p.stdout.readline,''):
+			log.debug("got line: %s", line)
+			if isinstance(line, bytes):
+				line = line.decode('utf-8')
+			yield line
+			if p.poll() is not None:
+				break
+
+		log.debug("get rest of output")
+		data = p.stdout.read()
+		if isinstance(data, bytes):
+			data = data.decode('utf-8')
+		if data:
+			for line in data.splitlines(1):
+				yield line
+
+		log.debug("waiting for process")
+		p.wait()
+		log.debug("done")
+		#return self.menu()
+
+	def shell_execute(self, *args):
+		return self.execute( *(self.shell + cmd_string(args)) )
 
 class ConsoleXiki(BaseXiki):
 	def __init__(self, user_root="~/.pyxiki", plugin_root=None):
@@ -156,8 +270,6 @@ class ConsoleXiki(BaseXiki):
 		plugin_root = os.path.join(os.path.dirname(__file__), '..')
 		plugin_root = os.path.abspath(plugin_root)
 		self.register_plugin('xiki', root=plugin_root)
-
-
 
 class ProxyXiki:
 	def __init__(self, xiki):
@@ -220,16 +332,6 @@ class XikiContext(XikiBase):
 		if isinstance(self.PATTERN, str):
 			self.PATTERN = re.compile(self.PATTERN)
 
-		if not self.context:
-			self.working_dir = self.xiki.getcwd()
-
-			if platform.system() == 'Windows':
-				self.shell = ['cmd', '/c']
-			else:
-				self.shell = ['bash', '-c']
-
-			self.dispatch_path = None
-
 		self.node_path = None
 		self.xiki_path = None
 
@@ -243,23 +345,22 @@ class XikiContext(XikiBase):
 		a class's instance.  So attribute im_func has to be taken, which contains
 		actual "unbound" method.
 		'''
-		if self.context:
-			if hasattr(self.context.__class__, name):
-				method = getattr(self.context.__class__, name)
-				if callable(method):
-					if hasattr(method, 'im_func'):
-						method = method.im_func
-					return lambda *args, **kargs: method(self, *args, **kargs)
-				else:
-					return getattr(self.context, name)
+		if 0:
+			if self.context:
+				if hasattr(self.context.__class__, name):
+					method = getattr(self.context.__class__, name)
+					if callable(method):
+						if hasattr(method, 'im_func'):
+							method = method.im_func
+						return lambda *args, **kargs: method(self, *args, **kargs)
 
-		method = getattr(self.__class__, 'default_'+name)
-		if callable(method):
-			if hasattr(method, 'im_func'):
-				method = method.im_func
-			return lambda *args, **kargs: method(self, *args, **kargs)
+				return getattr(self.context, name)
+		else:
+			if self.context:
+				return getattr(self.context, name)
 
-		return getattr(self.context, 'default_'+name)
+		raise AttributeError("%s has not attribute %s" % (self.__class__.__name__, name))
+
 
 
 	def __str__(self):
@@ -290,7 +391,18 @@ class XikiContext(XikiBase):
 		if self.PATTERN:
 			self.mob = self.PATTERN.search(xiki_path[0])
 			if self.mob:
+				try:
+					xp = self.mob.group('xiki_path')
+				except:
+					xp = None
+
 				self.xiki_path = xiki_path[1:]
+				if xp:
+					self.xiki_path.path.insert(0, (xp, 0))
+
+				data_name = "%s_data" % self.__class__.__name__
+				setattr(self, data_name, self.mob.groupdict())
+
 				return True
 
 		elif self.CONTEXT:
@@ -331,57 +443,6 @@ class XikiContext(XikiBase):
 		if self.xiki_path:
 			return self.xiki_path.close(self.xiki, context=self, input=input)
 
-	def default_exists(self, path):
-		return self.xiki.path_exists(path)
-
-	def default_listdir(self, dir):
-		return self.xiki.listdir(dir)
-
-	def default_execute(self, *args, **kargs):
-		log.debug("execute args: %s", args)
-		log.info("Executing: %s", self.cmd_string(args))
-		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-		if 'cwd' not in kargs:
-			kargs['cwd'] = self.working_dir
-
-		p = subprocess.Popen( list(args), stdout = subprocess.PIPE, **kargs )
-
-		for line in iter(p.stdout.readline,''):
-			log.debug("got line: %s", line)
-			yield line
-			if p.poll() is not None:
-				break
-
-		log.debug("get rest of output")
-		data = p.stdout.read()
-		if data:
-			yield data
-
-		log.debug("waiting for process")
-		p.wait()
-		log.debug("done")
-		#return self.menu()
-
-	def dispatch(self, thing, method, *args, **kargs):
-		'''
-			if thing is an action subclass, this dispatches to method of action object
-			if method is None or a XikiContext object, this returns a context
-			to handle something
-
-			dispatches a path 
-		'''
-		log.debug("%s dispatching %s(%s, %s)", self, thing, args, kargs)
-
-		if method is None:
-			return self.xiki.dispatch_ctx(self.view, self.line_region, self.action, self, thing)
-
-		if isinstance(method, XikiContext):
-			return self.xiki.dispatch_ctx(self.view, self.line_region, self.action, method, thing)
-
-		return getattr(thing(self.xiki, self.view, self.line_region, self.action, 
-			ctx=self), method)(*args, **kargs)
-
-
 	def full_expand(self, *args, **kargs):
 		return self.expand(*args, **kargs)
 
@@ -393,29 +454,6 @@ class XikiContext(XikiBase):
 
 	def collapse(self, input=None, *args, **kargs):
 		return None
-
-	def default_mkdir(self, *args):
-		self.xiki.makedirs(os.path.join(self.working_dir, *args))
-
-	def default_cmd_string(self, args):
-		r = []
-		for a in args:
-			if not a.isalnum():
-				r.append('"'+a.replace('\\', '\\\\').replace('"', '\\"')+'"')
-			else:
-				r.append(a)
-		return ' '.join(r)
-
-	def default_shell_execute(self, *args):
-		return self.execute( *(self.shell + self.cmd_string(args)) )
-
-	def default_setcwd(self, *args):
-		x = '/'.join(args)
-		# maybe expand shell vars and userdir here
-		if os.path.isabs(x):
-			self.working_dir = x
-		else:
-			self.working_dir = os.path.join(self.working_dir, x)
 
 	@classmethod
 	def loaded(cls):

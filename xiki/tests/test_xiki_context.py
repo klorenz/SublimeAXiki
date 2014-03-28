@@ -9,36 +9,55 @@ from unittest import TestCase
 from ..path import XikiPath
 from ..core import XikiContext, ConsoleXiki
 
-class CtxStub(XikiContext):
-	def root_menuitems(self):
-		return None
-	def execute(self, *args, **kargs):
-		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-		return ["execute(%s, %s) in %s" % (repr(args), repr(kargs), self.working_dir)]
-
 class MyXiki(ConsoleXiki):
 	def getcwd(self):
 		return "/foo"
 	def makedirs(self, name):
 		return None
+	def execute(self, *args, **kargs):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+		print("args: %s, kargs: %s" % (args, kargs) )
+
+		if args[-1].startswith('[ -d /foo/bar '):
+#			import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+			return ["y\n"]
+
+		if args[-1].startswith('~/'):
+			return ["/home/"+args[-1][2:]]
+
+		return ["execute(%s, %s)" % (repr(args), repr(kargs))]
 
 
 class TestXikiContext(TestCase):
 
 	def _test_xiki_path(self, path, expected):
-		x = XikiPath(path, rootctx=CtxStub).open(MyXiki())
+		x = XikiPath(path).open(MyXiki())
 		if isinstance(x, str): x = [x]
 		self.assertEquals([y for y in x], expected)
 
-	def test_ssh(self):
+	def test_ssh_rootmenu(self):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		self._test_xiki_path("user@host.com:1234", [
 			"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F'), "
-			"{}) in /foo" 
+			"{})\n" 
 			])
+
+	def test_ssh_home(self):
+		self._test_xiki_path("user@host.com:1234/foo/bar", [
+			"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F'), "
+			"{})\n" 
+			])
+
+	def test_ssh_root(self):
+		self._test_xiki_path("user@host.com:1234//foo/bar", [
+			"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F', '/foo/bar'), "
+			"{})\n" 
+			])
+
 
 	def test_execute(self):
 		self._test_xiki_path("/foo/bar/$ ls -l",[
-		 	"execute(('ls', '-l'), {}) in /foo/bar"
+		 	"execute(('ls', '-l'), {'cwd': '/foo/bar'})"
 			])
 
 	def test_root_menu(self):
@@ -50,6 +69,7 @@ class TestXikiContext(TestCase):
 			'xiki\n',
 			'~/\n./\n/\n'
 			])
+
 	def test_menu(self):
 		import sys, os
 		self._test_xiki_path("directory/", [ 

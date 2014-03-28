@@ -4,7 +4,7 @@ if __name__ == '__main__':
 import os, re, sys, logging, platform
 
 from .util import *
-from .core import XikiContext
+from .core import XikiContext, INDENT
 
 log = logging.getLogger('xiki.contexts')
 
@@ -40,7 +40,9 @@ class directory(XikiContext):
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 
 		p = node_path
-		p = os.path.expanduser(os.path.expandvars('/'.join(p))).replace('\\', '/')
+	#	p = self.shell_expand('/'.join(p)).replace('\\', '/')
+		p = self.shell_expand(''.join(p)).replace('\\', '/')
+		log.debug("p: %s", p)
 		p = p.split('/')
 
 		log.debug("p: %s", p)
@@ -54,97 +56,104 @@ class directory(XikiContext):
 			p = p[2:]
 
 		elif p[0] == '.':
-			self.working_dir = self.xiki.getcwd()
+			self.working_dir = self.getcwd()
 			p = p[1:]
 
 		elif p[0] == '~':
-			self.working_dir = os.path.expanduser('~')
+			self.working_dir = self.shell_expand('~')
 			p = p[1:]
 
 		elif p[0].startswith('~'):
 			f = p[0][1:].strip('/')
-			if f not in self.xiki.get_system_dirs():
-				if f not in self.xiki.get_project_dirs():
+			if f not in self.get_system_dirs():
+				if f not in self.get_project_dirs():
 					return False
 
-			self.working_dir = self.xiki.expand_dir(f)
+			self.working_dir = self.expand_dir(f)
 			
 			p = p[1:]
 		else:
 			return False
 
-		log.debug("p: %s", p)
-		log.debug("working_dir: %s", self.working_dir)
+		self.working_dir = os.path.join(self.working_dir, *p)
 
-		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-		while p:
-			working_dir = os.path.join(self.working_dir, p[0])
-			log.debug("try working_dir: %s", working_dir)
-			if not self.exists(working_dir):
-				break
-			else:
-				self.working_dir = working_dir
-				p = p[1:]
-
-		log.debug("p: %s, node_path: %s", p, node_path)
-		if p == node_path: return False
-
-		if node_path.isdir() and p:
-			self.mkdir(*p)
-			self.working_dir = os.path.join(self.working_dir, *p)
-			p = []
-
-		if not node_path.isdir() and not p:
+		if not self.isdir(self.working_dir):
 			self.file_path   = self.working_dir
 			self.working_dir = os.path.dirname(self.working_dir)
 			self.file_name   = node_path[-1]
 
-		if not node_path.isdir() and p:
-			self.file_path = os.path.join(self.working_dir, *p)
-			self.file_name = p[-1]
-			p = p[:-1]
-			if p:
-				self.mkdir(*p)
-				self.working_dir = os.path.join(self.working_dir, *p)
-				p = []
+		# log.debug("p: %s", p)
+		# log.debug("working_dir: %s", self.working_dir)
 
-		from .path import XikiPath
+		# #import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+		# while p:
+		# 	working_dir = os.path.join(self.working_dir, p[0])
+		# 	log.debug("try working_dir: %s", working_dir)
+		# 	if not self.exists(working_dir):
+		# 		continue
 
-		if p:
-			self.xiki_path = XikiPath(p)
+		# 		break
+		# 	else:
+		# 		self.working_dir = working_dir
+		# 		p = p[1:]
 
-		self.node_path = node_path
+		# log.debug("p: %s, node_path: %s", p, node_path)
+		# if p == node_path: return False
 
-		#if p:
-		#	return False
+		# if node_path.isdir() and p:
+		# 	self.mkdir(*p)
+		# 	self.working_dir = os.path.join(self.working_dir, *p)
+		# 	p = []
+
+		# if not node_path.isdir() and not p:
+		# 	self.file_path   = self.working_dir
+		# 	self.working_dir = os.path.dirname(self.working_dir)
+		# 	self.file_name   = node_path[-1]
+
+		# if not node_path.isdir() and p:
+		# 	self.file_path = os.path.join(self.working_dir, *p)
+		# 	self.file_name = p[-1]
+		# 	p = p[:-1]
+		# 	if p:
+		# 		self.mkdir(*p)
+		# 		self.working_dir = os.path.join(self.working_dir, *p)
+		# 		p = []
+
+		# from .path import XikiPath
+
+		# if p:
+		# 	self.xiki_path = XikiPath(p)
+
+		# self.node_path = node_path
+
+		# #if p:
+		# #	return False
 
 		return True
 
 	def menu(self):
 		log.debug("(menu) working_dir: %s", self.working_dir)
-		log.debug("(menu) node_path: %s", self.node_path.path)
+		#log.debug("(menu) node_path: %s", self.node_path.path)
 
 		if self.file_path:
-			lines = self.xiki.open_file(self.file_path)
-
-			if lines is None:
-				return []
+			lines = self.open_file(self.file_path)
 
 			if lines:
 				if isinstance(lines, str):
 					lines = lines.splitlines(1)
+				for line in lines:
+					yield "| "+line
 
-				return [ "| "+l for l in lines ]
+		else:
+			log.debug("listdir of: %s", self.working_dir)
+			for entry in self.listdir(self.working_dir):
+				yield '+ %s\n' % entry
 
-		if self.node_path.isdir():
-			return [ '+ %s\n' % x for x in self.listdir(self.working_dir) ]
+	def execute(self, *args, **kargs):
+		if not kargs.get('cwd'):
+			kargs['cwd'] = self.working_dir
+		return self.context.execute(*args, **kargs)
 
-		return "???"
-
-	#def open(self)
-
-	def expand(self, s, arg=None):
-		return self.dispatch(XikiFileOpener, 'expand', s)	
 
 class XikiMenuFiles:
 	def __init__(self, xiki):
@@ -303,6 +312,7 @@ class menu(XikiContext):
 		return ''.join(sorted([x+"\n" for x in result if x]))
 
 	def does(self, xiki_path):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		if not xiki_path: return False
 
 		global g_xiki_menu_files
@@ -316,7 +326,7 @@ class menu(XikiContext):
 		menu = None
 		i = len(xiki_path)
 		while i > 0:
-			name = '/'.join(xiki_path[:i])
+			name = str(xiki_path[:i])
 
 			if name not in g_xiki_menu_files:
 				i -= 1
@@ -367,60 +377,147 @@ class xiki(XikiContext):
 
 
 class ssh(XikiContext):
-	NODE_RE = re.compile(r'''(?x) ^
-		(?P<cmd>(?P<user>[\w\-]+) @ (?P<host>[\w\-]+(\.[\w\-]+)*) (?::(?P<port>\d+))?)
-		:?/?$''')
+	PATTERN = re.compile(r'''(?x) ^
+		(?P<cmd>
+			(?P<user>[\w\-]+) @ (?P<host>[\w\-]+(\.[\w\-]+)*) 
+			(?::(?P<port>\d+))?)
+		(?::(?P<extra>.*))?$''')
 
-	def does(self, node_path):
-		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-		if not node_path: return False
+	SETTINGS = '''
+	- |remote_shell: bash
 
-		m = self.NODE_RE.search(node_path[0])
-		if not m:
-			return False
+	  Specify remote shell to be executed on shell command.
 
-		self.ssh_data = m.groupdict()
-		self.ssh_working_dir = ''.join(node_path[1:])
-		self.remote_shell = 'bash'
+	  See also:
+	  - @docs/shell
+	'''
 
-		self.node_path = node_path
-		self.dispatch_path = []
+	def does(self, xiki_path):
+		r = XikiContext.does(self, xiki_path)
+		if not r: return r
 
-		return True
+		extra = self.mob.group('extra')
+		if extra:
+			# handle path$ some command
+			pass
+
+		try:
+			self.xiki_path.context(self.xiki, context=self)
+
+		except LookupError:
+			log.warning("could not lookup context for %s" % self.xiki_path)
+			self.xiki_path.insert(0, "~/")
+
+		return r
+
 
 	def get_ssh_cmd(self):
 		cmd = [ 'ssh' ]
-		if self.ssh_data['port']:
-			cmd += [ '-p', self.ssh_data['port'] ]
-		cmd += [ '%(user)s@%(host)s' % self.ssh_data ]
+		ssh_data = self.ssh_data
+
+		if ssh_data['port']:
+			cmd += [ '-p', ssh_data['port'] ]
+		cmd += [ '%(user)s@%(host)s' % ssh_data ]
 		return cmd
 
-	def execute(self, *args):
+	def listdir(self, path=None):
+		'''usually path is not optional, but we allow it not to be set to 
+		list the default ssh landing directory from menu'''
+
+		if path is None:
+			output = self.execute('ls', '-F')
+		else:
+			output = self.execute('ls', '-F', path)
+
+		for line in output:
+			line = line.strip()
+			if not line: continue
+			log.debug("line: %s", line)
+			if line[-1] in "*=>@|":
+				line = line[:-1]
+			yield line
+
+	def read_file(self, path, count=None):
+		if count is not None:
+			return self.execute('head', '-n', str(count), path)
+		else:
+			return self.execute('cat', path)
+
+	def open_file(self, path, opener=None, bin_opener=None, text_opener=None):
+		return self.context.open_file(self.cached_file(path))
+
+	def exists(self, path):
+		output = ''.join([x for x in 
+			self.execute('[ -e %s ] && echo y || echo n' % cmd_string(path))])
+		return output.strip() == 'y'
+
+	def get_project_dirs(self):
+		return []
+
+	def get_system_dirs(self):
+		return []
+
+	def shell_expand(self, name):
+		name = str(name)
+
+		if "$" not in name and "~" not in name:
+			return name
+
+		return ''.join([x for x in self.execute('echo', name)]).strip()
+
+	def isdir(self, path):
+		output = ''.join([x for x in 
+			self.execute('[ -d %s ] && echo y || echo n' % cmd_string(path))])
+		return output.strip() == 'y'
+
+	def walk(self, root):
+		for line in self.execute('find', root, '-type', 'f'):
+			yield line
+
+	def makedirs(self, *path):
+		p = cmd_string('/'.join(list(path)))
+		self.execute('[ ! -e %s ] && mkdir -p %s' % (p, p))
+
+	def execute(self, *args, **kargs):
+		working_dir = kargs.get('cwd')
 		cmd = self.get_ssh_cmd()
-		if self.ssh_working_dir:
-			return self.context.execute(*(cmd + 
-				['sh', '-c', 'cd "%s" && ' + self.cmd_string(args)]))
+
+		if working_dir:
+			args = cmd_string(args)
+			cwd  = cmd_string(working_dir)
+			rcmd = 'cd %s && %s' % (cwd, args)
+			rcmd = cmd_string(rcmd)
+			return self.context.execute(*(cmd + ['sh', '-c', rcmd ]))
 		else:
 			return self.context.execute(*(cmd + list(args)))
 
 	def menu(self):
-		for line in self.execute('ls', '-F'):
-			line = line.strip()
-			if not line: continue
-			if line[-1] in "*=>@|":
-				line = line[:-1]
+		return [ '+ ~/\n', '+ /\n' ]
 
-			yield '+ '+line
+	# def menu(self):
+	# 	if self.node_path.isdir():
+	# 		for line in self.execute('ls', '-F'):
+	# 			line = line.strip()
+	# 			if not line: continue
+	# 			log.debug("line: %s", line)
+	# 			if line[-1] in "*=>@|":
+	# 				line = line[:-1]
 
+	# 			yield '+ %s\n' % line
 
-	def shell_execute(self, *args):
+	def shell_execute(self, *args, **kargs):
+
+		working_dir = kargs.get('cwd')
 		cmd = self.get_ssh_cmd()
 
-		args = [self.remote_shell, "-c", self.cmd_string(args)]
+		args = [self.remote_shell, "-c", cmd_string(cmd_string(args))]
 
-		if self.ssh_working_dir:
-			return self.context.execute(*(cmd + 
-				['sh', '-c', 'cd "%s" && ' + self.cmd_string(args)]))
+		if working_dir:
+			args = cmd_string(args)
+			cwd  = cmd_string(working_dir)
+			rcmd = 'cd %s && %s' % (cwd, args)
+			rcmd =  cmd_string(rcmd)
+			return self.context.execute(*(cmd + ['sh', '-c', rcmd]))
 		else:
 			return self.context.execute(*(cmd + args))
 

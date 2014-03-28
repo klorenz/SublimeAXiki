@@ -11,6 +11,78 @@ INDEX_RE  = re.compile(r'\[(\d+)\](?=/|$)')
 BULLET_RE = re.compile(r'[\-–—+]\s')
 CONTEXT_RE = re.compile(r'[@$]')
 
+NODE_LINE_1 = re.compile(r'(?x) (?P<indent>\s*) @ \s* (?P<node>.*) ')
+NODE_LINE_2 = re.compile(r'(?x) (?P<indent>\s*) (?P<node>\$ .*) ')
+NODE_LINE_COMMENT = re.compile(r'(?x) \s+(?:--|—|–)\s+.*$')
+PATH_SEP = re.compile(r'(?:/| -> | → )')
+
+def match_node_line(s):
+	from .util import get_indent
+	#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
+	r = {}
+	m = NODE_LINE_1.match(s)
+	if m:
+		return {
+			'indent': m.group('indent'),
+			'ctx'   : '@',
+			'node'  : m.group('node'),
+		}
+
+	m = NODE_LINE_2.match(s)
+	if m:
+		return {
+			'indent': m.group('indent'),
+			'ctx'   : '$',
+			'node'  : m.group('node'),
+		}
+
+	r = { 'indent' : get_indent(s), 'ctx': None}
+	m = NODE_LINE_COMMENT.search(s)
+	if m:
+		s = s[:m.start()]
+
+	s = s.strip()
+
+	if not BULLET_RE.match(s):
+		if not r['indent']:
+			r['node'] = [s]
+			return r
+
+		return None
+
+	s = s[1:].strip()
+
+	if s.startswith('@'):
+		s = s[1:].strip()
+		r['ctx'] = '@'
+	elif s.startswith('$ '):
+		r['ctx'] = '$'
+	elif s.startswith('``') and s.endswith('``'):
+		s = s[2:-2]
+		r['ctx'] = '``'
+	elif s.startswith('`') and s.endswith('`'):
+		s = s[1:-1]
+		r['ctx'] = '`'
+	elif s.startswith('`') and s.endswith('`_'):
+		s = s[1:-2]
+		r['ctx'] = '`'
+
+	if not s.startswith('$'):
+		if s.endswith("/"):
+			s = s[:-1]
+			r['node'] = re.split(PATH_SEP, s)
+			r['node'][-1] += '/'
+		else:
+			r['node'] = re.split(PATH_SEP, s)
+
+		for i in range(len(r['node'])-1):
+			r['node'][i] += '/'
+	else:
+		r['node'] = [s]
+
+	return r
+
 log = logging.getLogger('xiki.path')
 
 class XikiError(Exception):
@@ -31,6 +103,8 @@ class XikiPath:
 				self.paths = self.path_from_tree(path)
 			else:
 				self.paths = self.parse(path)
+
+			log.debug("%s -> %s", repr(path), self.paths)
 		else:
 			self.path = path
 
@@ -49,6 +123,12 @@ class XikiPath:
 		if self.paths:
 			return bool(self.paths)
 		return bool(self.path)
+
+	def insert(self, index, path):
+		if not isinstance(path, tuple):
+			return self.path.insert(index, (path, 0))
+		else:
+			return self.path.insert(index, path)
 
 	def parse(self, path):
 		paths = [[]]
@@ -93,8 +173,11 @@ class XikiPath:
 						paths[-1].append( (p, index) )
 						continue
 
+			append_slash = False
+
 			if '/' in path:
 				p, path = path.split('/', 1)
+				append_slash = True
 			else:
 				p = path
 				path = ''
@@ -105,10 +188,12 @@ class XikiPath:
 					index = int(m.group(1))
 					p = p[:m.start()]
 
-			paths[-1].append((p+"/", index))
+			if append_slash:
+				p += "/"
+
+			paths[-1].append((p, index))
 
 		return paths
-
 
 	def path_from_tree(self, lines):
 		'''assumes to get a subtree, which is to be processed.
@@ -132,26 +217,52 @@ class XikiPath:
 
 			foo/first/glork
 		'''
-		from .util import get_indent
-
-		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 
 		node_paths = [[]]
-
+		old_line = None
 		indent = None
-		for line in reversed(lines.splitlines(1)):
-			_indent = get_indent(line)
+		from itertools import chain
 
-			s = line.strip()
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+		for line in chain(reversed(lines.splitlines(1)), [None]):
+
+			# handle line continuations
+			process_line = None
+			if line is None:
+				process_line = old_line
+			elif line.endswith("\\\n"):
+				line = line[:-2] + old_line.lstrip()
+			else:
+				process_line = old_line
+
+			old_line = line
+
+			if process_line is None: continue
+
+			# start processing of line
+			line = process_line
+			# if 'hardcopy' in line:
+			# 	import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
+			mob  = match_node_line(line)
+
+			if not mob: continue
+
+			_indent = mob['indent']
+
+			s = mob['node'][0]
+			nodes = mob['node'][1:]
+
+			for n in nodes:
+				node_paths[-1].append( (n, 0) )
 
 			if indent is None:
 				indent = _indent
-				if not s:
-					break
+				if not s: break
 
-				if BULLET_RE.match(s) or s[0] == '@':
-					s = s[1:].strip()
-				node_paths[-1].append( (s, 0) )
+				node_paths[-1].append( (s, 0))
+				if mob['ctx']:
+					node_paths.append([])
 				continue
 
 			if len(_indent) == 0:
@@ -159,24 +270,16 @@ class XikiPath:
 				break
 
 			if len(_indent) == len(indent):
-				if BULLET_RE.match(s):
-					if node_paths[-1]:
-						s = s[1:].strip()
-						if node_paths[-1][-1][0] == s:
-							s, i = node_paths[-1][-1]
-							node_paths[-1][-1] = s, i+1
-							continue
+				if node_paths[-1]:
+					if node_paths[-1][-1][0] == s:
+						s, i = node_paths[-1][-1]
+						node_paths[-1][-1] = s, i+1
+						continue
 
 			if 0 < len(_indent) < len(indent):
-				if BULLET_RE.match(s):
-					s = s[1:].strip()
-					node_paths[-1].append( (s, 0) )
-				if s[0] == '@':
+				node_paths[-1].append( (s, 0) )
+				if mob['ctx']:
 					node_paths.append([])
-					node_paths[-1].append( (s[1:].strip(), 0) )
-				if s[0] == '$':
-					node_paths[-1].append( (s, 0) )
-
 				indent = _indent
 
 		for np in node_paths:
@@ -193,10 +296,16 @@ class XikiPath:
 				result.append("@"+str(XikiPath(p)))
 		else:
 			for p in self:
-				if "/" in p or "@" in p:
+				if p.endswith('/'):
+					p = p[:-1]
+				if "/" in p or p.startswith('@'):
 					p = '"%s"' % p.replace("\\", "\\\\").replace('"', '\\"')
 				result.append(p)
+
 		return "/".join(result)
+
+	def __repr__(self):
+		return "XikiPath("+repr(str(self))+")"
 
 	def __getitem__(self, thing):
 		if self.paths:
@@ -222,7 +331,7 @@ class XikiPath:
 
 		# root context
 		if context is None:
-			context = self.rootctx(xiki)
+			context = xiki
 
 		# nested contexts
 		if self.paths:
@@ -240,7 +349,7 @@ class XikiPath:
 				log.info("%s does %s", ctx, self)
 				return ctx
 
-		raise XikiError("context not found for %s" % self)
+		raise LookupError("xiki context not found for %s" % self)
 
 	def open(self, xiki, context=None, input=None, cont=False):
 		context = self.context(xiki, context)

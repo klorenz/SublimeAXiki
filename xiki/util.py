@@ -32,12 +32,15 @@ def get_args(line, mob):
 TEXT_CHARACTERS = re.compile(r'[\x20-\x7f\n\r\t\b]')
 
 # taken from http://stackoverflow.com/questions/1446549/how-to-identify-binary-and-text-files-using-python
-def is_text_file(filename):
+def is_text_file(filename, bytes=None):
 	import string
 
-	f = open(filename, 'rb')
-	s = f.read(512)
-	f.close()
+	if bytes is None:
+		f = open(filename, 'rb')
+		s = f.read(512)
+		f.close()
+	else:
+		bytes = s
 
 	if not s:
 		# Empty files are considered text
@@ -86,7 +89,17 @@ def unindent(s):
 
 	return ''.join(r)
 
-
+NON_ESCAPE_CHARS = re.compile(r'^[\w\-/\.=~]+$')
+def cmd_string(args):
+	if isinstance(args, str):
+		args = [args]
+	r = []
+	for a in args:
+		if not NON_ESCAPE_CHARS.match(a):
+			r.append('"'+a.replace('\\', '\\\\').replace('"', '\\"')+'"')
+		else:
+			r.append(a)
+	return ' '.join(r)
 
 
 def find_lines(context, text, node_path):
