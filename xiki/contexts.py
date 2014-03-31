@@ -4,7 +4,7 @@ if __name__ == '__main__':
 import os, re, sys, logging, platform
 
 from .util import *
-from .core import XikiContext, INDENT
+from .core import XikiContext, INDENT, Snippet
 
 log = logging.getLogger('xiki.contexts')
 
@@ -14,13 +14,15 @@ PY3 = sys.version_info[0] >= 3
 def exec_code(code, globals=None, locals=None):
 	if PY3:
 		import builtins
-		getattr(builtins, 'exec')(code, globals=globals, locals=locals)
+		getattr(builtins, 'exec')(code, globals, locals)
+		exec(code, globals, locals)
 	else:
 		#frame = sys._getframe()
 		exec(code, globals, locals)
 		#eval("exec code in globals, locals", frame.f_globals, frame.f_locals)
 
 class directory(XikiContext):
+	PS1 = "  $ "
 	def root_menuitems(self):
 		try:
 			import sublime
@@ -157,10 +159,10 @@ class directory(XikiContext):
 
 class XikiMenuFiles:
 	def __init__(self, xiki):
-		self.xiki = xiki
 		self.nodes = {}
 		self.dirs  = set()
 		self.path = set()
+		self.xiki = xiki
 
 	def __getitem__(self, name):
 		#import spdb ; spdb.start()
@@ -197,16 +199,16 @@ class XikiMenuFiles:
 				if not _dir: continue
 				self.dirs.add(_dir)
 
+			mod_name = 'xiki.menu.%s' % '.'.join(parts)
+			m = imp.new_module(mod_name)
+			m.__file__ = path_name
+			m.__dict__['xiki'] = self.xiki
+
 			if ext == '.py':
 				source = self.xiki.read_file(path_name)
 				code = compile(source, node_name, 'exec')
-				mod_name = 'xiki.menu.%s' % name
-				m = imp.new_module('xiki.menu.%s' % name)
-				m.__file__ = path_name
-				m.__dict__['xiki'] = xiki
 
-
-				exec_code(code, globals=m.__dict__)
+				exec_code(code, m.__dict__)
 
 				sys.modules[mod_name] = m
 
@@ -230,9 +232,6 @@ class XikiMenuFiles:
 
 			else:
 				source = self.xiki.read_file(path_name)
-				m = imp.new_module('xiki.menu.%s' % name)
-				m.__file__ = path_name
-				m.__dict__['xiki'] = xiki
 
 				menu   = []
 				pycode = []
@@ -297,11 +296,13 @@ class XikiMenuFiles:
 g_xiki_menu_files = None
 
 class menu(XikiContext):
+	''' Todo: find always right set of menu files, e.g. if switching projects
+	'''
 
 	def root_menuitems(self):
 		global g_xiki_menu_files
 		if g_xiki_menu_files is None:
-			g_xiki_menu_files = XikiMenuFiles(self.xiki)
+			g_xiki_menu_files = XikiMenuFiles(self.get_xiki())
 
 		g_xiki_menu_files.update()
 
@@ -317,7 +318,7 @@ class menu(XikiContext):
 
 		global g_xiki_menu_files
 		if g_xiki_menu_files is None:
-			g_xiki_menu_files = XikiMenuFiles(self.xiki)
+			g_xiki_menu_files = XikiMenuFiles(self.get_xiki())
 
 		g_xiki_menu_files.update()
 
@@ -353,7 +354,20 @@ class menu(XikiContext):
 	def open(self, input=None, cont=None):
 		#import spdb ; spdb.start()
 		if hasattr(self.menu, 'menu'):
-			return find_lines(self.context, getattr(self.menu, 'menu')(self), self.xiki_path)
+			func = getattr(self.menu, 'menu')
+			if func.func_code.co_argcount == 0:
+				output = func()
+			elif func.func_code.co_argcount == 1:
+				output = func(self)
+			elif func.func_code.co_argcount == 2:
+				output = func(self, input)
+			else:
+				raise NotImplementedError("too many arguments")
+
+			if not isinstance(output, Snippet):
+				return find_lines(self.context, output, self.xiki_path)
+			else:
+				return output
 
 		if isinstance(self.menu, str):
 			return self.menu
@@ -396,19 +410,34 @@ class ssh(XikiContext):
 		r = XikiContext.does(self, xiki_path)
 		if not r: return r
 
+		#import spdb ; spdb.start()
+		log.debug("mob: %s", self.mob.groupdict())
+
 		extra = self.mob.group('extra')
+		log.debug("extra: %s", extra)
 		if extra:
 			# handle path$ some command
 			pass
 
-		try:
-			self.xiki_path.context(self.xiki, context=self)
-
-		except LookupError:
-			log.warning("could not lookup context for %s" % self.xiki_path)
+		if not self.xiki_path:
 			self.xiki_path.insert(0, "~/")
 
-		return r
+		elif not self.xiki_path.isfilepath():
+			log.debug("test xiki_path %s", self.xiki_path)
+
+			# determine if this is still a filepath
+			try:
+				self.subcontext = self.xiki_path.context(context=self)
+
+			except LookupError:
+				log.warning("could not lookup context for %s" % self.xiki_path)
+				self.xiki_path.insert(0, "~/")
+
+		if not self.subcontext:
+			self.subcontext = self.xiki_path.context(self)
+
+		return True
+
 
 
 	def get_ssh_cmd(self):
@@ -444,7 +473,9 @@ class ssh(XikiContext):
 			return self.execute('cat', path)
 
 	def open_file(self, path, opener=None, bin_opener=None, text_opener=None):
-		return self.context.open_file(self.cached_file(path))
+		raise NotImplementedError("Open file via SSH not yet implemented")
+		cache_name = '%(user)s@%(host)s' % ssh_data
+		return self.context.open_file( self.cached_file(cache_name, path) )
 
 	def exists(self, path):
 		output = ''.join([x for x in 
@@ -461,6 +492,17 @@ class ssh(XikiContext):
 		name = str(name)
 
 		if "$" not in name and "~" not in name:
+			return name
+
+		home_dir = self.get_static('~')
+		if not home_dir:
+			home_dir = ''.join([x for x in self.execute('echo', '~')]).strip()
+			self.set_static('~', home_dir)
+
+		if name.startswith('~'):
+			name = home_dir + name[1:]
+
+		if "$" not in name:
 			return name
 
 		return ''.join([x for x in self.execute('echo', name)]).strip()
@@ -481,6 +523,10 @@ class ssh(XikiContext):
 	def execute(self, *args, **kargs):
 		working_dir = kargs.get('cwd')
 		cmd = self.get_ssh_cmd()
+
+#		if not working_dir:
+#			if self.xiki_path:
+
 
 		if working_dir:
 			args = cmd_string(args)
@@ -530,8 +576,8 @@ class root(XikiContext):
 
 	def menu(self):
 		result = []
-		for ctx in XikiContext:
-			c = ctx(self.xiki)
+		for ctx in self.contexts():
+			c = ctx(self)
 			items = c.root_menuitems()
 			if items:
 				result.append(unindent(items))
@@ -548,6 +594,7 @@ class XikiShell(XikiContext):
 
 class XikiExec(XikiContext):
 	PATTERN = re.compile(r'^\s*\$\s+(.*)')
+	PS1     = "\$ "
 
 	COMMAND_RE = re.compile(r'''(?x)
 		(?:^|(?<=\s))
@@ -583,3 +630,51 @@ class XikiExec(XikiContext):
 		#	self.context.setcwd('/'.join(self.node_path))
 
 		return self.context.execute(*self.parse_command(s))
+
+class XikiPython(XikiContext):
+	PATTERN = re.compile(r'>>> (.*)')
+	PS1     = ">>> "
+
+	def open(self, input=None, cont=None):
+		s = self.mob.group(1)
+		_stderr = sys.stderr
+		_stdout = sys.stdout
+
+		try:
+			from io import StringIO
+		except ImportError:
+			from cStringIO import StringIO
+
+		_output = StringIO()
+
+		r = None
+
+		sys.stderr = _output
+		sys.stdout = _output
+
+		is_exec = False
+		try:
+			code = compile(s, "<string>", mode='eval')
+		except SyntaxError:
+			code = compile(s+"\n", "<string>", mode='exec')
+			is_exec = True
+
+		try:
+			if is_exec:
+				exec_code(code, sys.modules['__main__'].__dict__)
+			else:
+				r = eval(s, sys.modules['__main__'].__dict__)
+		except:
+			import traceback
+			traceback.print_exc()
+		finally:
+			sys.stderr = _stderr
+			sys.stdout = _stdout
+
+		_output.seek(0)
+
+		import pprint
+		if r is not None:
+			return [ pprint.pformat(r) ]
+		else:
+			return _output.readlines()

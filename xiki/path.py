@@ -5,16 +5,14 @@ if __name__ == '__main__':
 
 import re, os, logging
 
-STRING_RE = re.compile(r'"(\\.|[^"\\]+)*"')
-INDEX_RE  = re.compile(r'\[(\d+)\](?=/|$)')
-
-BULLET_RE = re.compile(r'[\-–—+]\s')
-CONTEXT_RE = re.compile(r'[@$]')
-
-NODE_LINE_1 = re.compile(r'(?x) (?P<indent>\s*) @ \s* (?P<node>.*) ')
-NODE_LINE_2 = re.compile(r'(?x) (?P<indent>\s*) (?P<node>\$ .*) ')
+STRING_RE         = re.compile(r'"(\\.|[^"\\]+)*"')
+INDEX_RE          = re.compile(r'\[(\d+)\](?=/|$)')
+BULLET_RE         = re.compile(r'[\-–—+]\s')
+CONTEXT_RE        = re.compile(r'[@$]')
+NODE_LINE_1       = re.compile(r'(?x) (?P<indent>\s*) @ \s* (?P<node>.*) ')
+NODE_LINE_2       = re.compile(r'(?x) (?P<indent>\s*) (?P<node>\$ .*) ')
 NODE_LINE_COMMENT = re.compile(r'(?x) \s+(?:--|—|–)\s+.*$')
-PATH_SEP = re.compile(r'(?:/| -> | → )')
+PATH_SEP          = re.compile(r'(?:/| -> | → )')
 
 def match_node_line(s):
 	from .util import get_indent
@@ -26,7 +24,7 @@ def match_node_line(s):
 		return {
 			'indent': m.group('indent'),
 			'ctx'   : '@',
-			'node'  : m.group('node'),
+			'node'  : [ m.group('node') ],
 		}
 
 	m = NODE_LINE_2.match(s)
@@ -34,7 +32,7 @@ def match_node_line(s):
 		return {
 			'indent': m.group('indent'),
 			'ctx'   : '$',
-			'node'  : m.group('node'),
+			'node'  : [ m.group('node') ],
 		}
 
 	r = { 'indent' : get_indent(s), 'ctx': None}
@@ -89,14 +87,15 @@ class XikiError(Exception):
 	pass
 
 class XikiPath:
-	def __init__(self, path, rootctx=None):
+	def __init__(self, path):
 		self.paths = None
 		self.path  = None
 
-		if rootctx is None:
-			from .core import XikiContext as rootctx
+		# if rootctx is None:
+		# 	from .core import XikiContext as rootctx
 
-		self.rootctx = rootctx
+		# self.rootctx = rootctx
+		log.debug("")
 
 		if isinstance(path, str):
 			if "\n" in path:
@@ -113,8 +112,9 @@ class XikiPath:
 			for p in self.paths:
 				yield p
 		else:
-			for p in self.path:
-				yield p[0]
+			if self.path:
+				for p in self.path:
+					yield p[0]
 
 	def __len__(self):
 		return len(self.path)
@@ -282,6 +282,9 @@ class XikiPath:
 					node_paths.append([])
 				indent = _indent
 
+		if not node_paths[-1]:
+			node_paths = node_paths[:-1]
+
 		for np in node_paths:
 			np.reverse()
 
@@ -317,6 +320,8 @@ class XikiPath:
 				return self.path[thing][0]
 
 	def isdir(self):
+		'''return true if this is a directory.'''
+
 		if self.paths:
 			path = self.paths[-1]
 		else:
@@ -326,35 +331,48 @@ class XikiPath:
 
 		return path[-1][0].endswith('/')
 
-	def context(self, xiki, context=None):
-		'''returns a context for this xiki_path'''
+	def isfilepath(self):
+		'''if this is a path in file system, return true, else false'''
+		if self.paths:
+			p = self.paths[0]
+		else:
+			p = self.path
 
-		# root context
-		if context is None:
-			context = xiki
+		if not p:
+			return False
+
+		if p[0][0] in ('~', '~/', '.', './', '/'):
+			return True
+
+		return False
+
+
+	def context(self, context=None):
+		'''returns a context for this xiki_path'''
 
 		# nested contexts
 		if self.paths:
 			for p in self.paths:
-				context = XikiPath(p).context(xiki, context)
+				context = XikiPath(p).context(context)
 			return context
 
-		from .core import XikiContext
+		#from .core import XikiContext
 
 		# single context for this path
-		for xiki_context in XikiContext:
-			ctx = xiki_context(xiki, ctx=context)
+		for xiki_context in context.contexts():
+			ctx = xiki_context(ctx=context)
 			log.debug("try %s for %s", ctx, self)
+
 			if ctx.does(self):
 				log.info("%s does %s", ctx, self)
-				return ctx
+				return ctx.get_context()
 
 		raise LookupError("xiki context not found for %s" % self)
 
-	def open(self, xiki, context=None, input=None, cont=False):
-		context = self.context(xiki, context)
+	def open(self, context, input=None, cont=False):
+		context = self.context(context)
 		return context.open(input=input, cont=cont)
 
-	def close(self, xiki, context=None, input=None):
-		context = self.context(xiki, context)
+	def close(self, context, input=None):
+		context = self.context(context)
 		return context.close(input=input)

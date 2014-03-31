@@ -3,7 +3,7 @@
 if __name__ == '__main__':
 	import test
 
-import logging, re, os, time, subprocess, platform
+import logging, re, os, time, subprocess, platform, threading
 log = logging.getLogger('xiki.core')
 
 from .util import *
@@ -52,19 +52,100 @@ class XikiSettings:
 			self.settings[name] = []
 		self.settings[name].append(value)
 
+class Snippet:
+	def __init__(self, thing):
+		if isinstance(thing, str):
+			self.snippet = [ unindent(thing) ]
+
+	def __str__(self):
+		return ''.join([x for x in self.snippet])
+
+	def __iter__(self):
+		yield str(self)
+
+class XikiError(Exception):
+	pass
+
+class XikiFileAlreadyExists(XikiError):
+	pass
+
+class XikiLookupError(XikiError):
+	pass
 
 class BaseXiki:
 	def __init__(self):
 		import tempfile
 		self.plugins      = {}
 		self.search_paths = {}
-		self.user_root    = None
 		self.cache_dir    = tempfile
+		self.storage      = {}
 
 		if platform.system() == 'Windows':
-			self.shell = ['cmd', '/c']
+			if "great" == self.exec_output("bash", "echo", "great").strip():
+				self.shell = ['bash', '-c']
+			else:
+				self.shell = ['cmd', '/c']
+
+			self.storage['home'] = os.path.expanduser('~/AppData/Roaming/axiki')
 		else:
 			self.shell = ['bash', '-c']
+			self.storage['home'] = os.path.expanduser('~/.config/axiki')
+
+		op = os.path
+		xiki_dir = op.abspath(op.join(op.dirname(__file__), '..'))
+
+		if os.path.exists(xiki_dir):
+			self.register_plugin('xiki', xiki_dir)
+
+		self.static_vars       = {}
+		self.default_storage   = 'home'
+		self.default_extension = '.xiki'
+		self.last_exit_code = {}
+
+	def contexts(self):
+		for ctx in XikiContext:
+			yield ctx
+
+	def parse_data(self, string):
+		from .parser import parse
+		return parse(string)
+
+	def isroot(self):
+		if isinstance(self, BaseXiki):
+			return True
+		return False
+
+	def store(self, xiki_path, content, storage=None):
+		if storage is None:
+			storage = self.default_storage
+
+		path = self.expand_dir(storage)
+
+		menu_dir = os.path.join(path, 'menu')
+		if not self.exists(menu_dir):
+			self.makedirs(menu_dir)
+
+		filepath = os.path.join(menu_dir, xiki_path + self.default_extension)
+
+		if self.exists(filepath):
+			raise XikiFileAlreadyExists("File already exists: %s" % filepath)
+
+		self.write_file(filepath, content)
+
+	def write_file(self, filepath, content):
+		with open(filepath, 'w') as f:
+			f.write(content)
+
+	def prompt(self):
+		if hasattr(self, 'PS1'):
+			return self.PS1
+		return None
+
+	def snippet(self, s):
+		return Snippet(s)
+
+	def get_xiki(self):
+		return self
 
 	def cached_file(self,filename):
 		content = self.read_file(filename)
@@ -78,6 +159,23 @@ class BaseXiki:
 				return f.read()
 			else:
 				return f.read(count)
+
+	def get_static(self, name, default=None, namespace=None):
+		if namespace not in self.static_vars:
+			return default
+
+		return self.static_vars[namespace].get(name, default)
+
+	def set_static(self, name, value, namespace=None):
+		if namespace not in self.static_vars:
+			self.static_vars[namespace] = {}
+		self.static_vars[namespace][name] = value
+
+	def clear_static(self, namespace=None):
+		if not namespace:
+			self.static_vars = {}
+		else:
+			self.static_vars[namespace] = {}
 
 	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None):
 		'''open a file in current environment.  Usually you would here
@@ -152,7 +250,9 @@ class BaseXiki:
 
 	def expand_dir(self, path):
 		'''expand project and system directory names here'''
-		return None
+		if path in self.storage:
+			return self.storage[path]
+		raise XikiLookupError("Storage %s not found" % path)
 
 	def shell_expand(self, path):
 		'''expands ~ and shellvars in current environment'''
@@ -231,12 +331,18 @@ class BaseXiki:
 		if 'cwd' not in kargs:
 			kargs['cwd'] = self.getcwd()
 
-		p = subprocess.Popen( list(args), stdout = subprocess.PIPE, **kargs )
+		# get_result = False
+		# if 'result' in kargs:
+		# 	get_result = kargs.get('result')
+		# 	del kargs['result']
+
+		p = subprocess.Popen( list(args), stdout = subprocess.PIPE, 
+			stderr = subprocess.STDOUT, **kargs )
 
 		for line in iter(p.stdout.readline,''):
 			log.debug("got line: %s", line)
 			if isinstance(line, bytes):
-				line = line.decode('utf-8')
+				line = line.decode('utf-8').replace('\r', '')
 			yield line
 			if p.poll() is not None:
 				break
@@ -250,12 +356,39 @@ class BaseXiki:
 				yield line
 
 		log.debug("waiting for process")
-		p.wait()
+		self.last_exit_code[threading.current_thread().name] = p.wait()
 		log.debug("done")
 		#return self.menu()
 
+	def exec_output(self, *args, **kargs):
+		return ''.join([ x for x in self.execute(*args, **kargs)])
+
+	def exec_result(self, *args, **kargs):
+		output = ''.join([ x for x in self.execute(*args, **kargs)])
+		return self.last_exit_code[threading.current_thread().name]
+
 	def shell_execute(self, *args):
 		return self.execute( *(self.shell + cmd_string(args)) )
+
+class MemXiki(BaseXiki):
+	STORAGE = {}
+
+	def write_file(self, path, content):
+		self.STORAGE[path] = content
+
+	def read_file(self, path, count=-1):
+		if path in self.STORAGE:
+			if count is not None and count > 0:
+				return self.STORAGE[path][:count]
+		return BaseXiki.read_file(self, path, count=count)
+
+	def exists(self, path):
+		if path in self.STORAGE:
+			return True
+		return BaseXiki.exists(self, path)
+
+	def makedirs(self, path):
+		return None
 
 class ConsoleXiki(BaseXiki):
 	def __init__(self, user_root="~/.pyxiki", plugin_root=None):
@@ -301,6 +434,19 @@ class Registry(type):
 		if hasattr(cls, 'loaded'):
 			cls.loaded()
 
+	def stash(cls, name):
+		if not hasattr(cls, registries):
+			cls.registries = {}
+
+		cls.registries[name] = self.registry.copy()
+
+	def emerge(cls, name):
+		if not hasattr(cls, registries):
+			cls.registries = {}
+
+		self.registry = cls.registries[name]
+
+
 	# Metamethods, called on class objects:
 	def __iter__(cls):
 		log.debug("values: %s", [x for x in cls.registry.values()])
@@ -312,8 +458,7 @@ class Registry(type):
 		return cls.__name__ + ": " + ", ".join([sc.__name__ for sc in cls])
 
 class XikiBase(object):
-	def __init__(self, xiki, ctx=None):
-		self.xiki        = xiki
+	def __init__(self, ctx=None):
 		self.context     = ctx
 
 RegExp = re.compile('').__class__
@@ -322,6 +467,8 @@ RegExp = re.compile('').__class__
 class XikiContext(XikiBase):
 	CONTEXT = None
 	PATTERN = None
+	PS1 = None
+	PS2 = None
 
 	NAME = None
 	MENU = None
@@ -334,6 +481,7 @@ class XikiContext(XikiBase):
 
 		self.node_path = None
 		self.xiki_path = None
+		self.subcontext = None
 
 	def __getattr__(self, name):
 		'''Basic idea is this: If a parent context has implemented a function
@@ -361,7 +509,24 @@ class XikiContext(XikiBase):
 
 		raise AttributeError("%s has not attribute %s" % (self.__class__.__name__, name))
 
+	def set_static(self, name, value, namespace=None):
+		'''set a static variable, which persists over runtime.'''
 
+		if namespace is None:
+			namespace=str(self)
+		return self.context.set_static(name, value, namespace=namespace)
+
+	def get_static(self, name, default=None, namespace=None):
+		'''set a static variable, which persists over runtime.'''
+
+		if namespace is None:
+			namespace=str(self)
+		return self.context.get_static(name, default=default, namespace=namespace)
+
+	def prompt(self):
+		if self.PS1:
+			return self.PS1
+		return None
 
 	def __str__(self):
 		if self.NAME:
@@ -425,6 +590,17 @@ class XikiContext(XikiBase):
 
 		return False
 
+	def get_context(self):
+		'''returns the actual context, who will do the work.  In :method:`does`
+		you may create subcontexts.  The leaf of these subcontexts shall be
+		stored in self.subcontext, which is returned here.
+		'''
+
+		if self.subcontext:
+			return self.subcontext
+		else:
+			return self
+
 	def root_menuitems(self):
 		return str(self)+"\n"
 
@@ -436,12 +612,12 @@ class XikiContext(XikiBase):
 
 	def open(self, input=None, cont=None):
 		if self.xiki_path:
-			return self.xiki_path.open(self.xiki, context=self, input=input, cont=cont)
+			return self.xiki_path.open(context=self, input=input, cont=cont)
 		return self.menu()
 
 	def close(self, input=None):
 		if self.xiki_path:
-			return self.xiki_path.close(self.xiki, context=self, input=input)
+			return self.xiki_path.close(context=self, input=input)
 
 	def full_expand(self, *args, **kargs):
 		return self.expand(*args, **kargs)

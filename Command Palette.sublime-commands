@@ -1,7 +1,7 @@
 [
     {
-        "caption": "Xiki IDE", 
         "args": {}, 
-        "command": "xiki_ide"
+        "command": "xiki_ide", 
+        "caption": "Xiki IDE"
     }
 ]

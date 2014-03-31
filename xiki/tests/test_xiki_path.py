@@ -86,6 +86,11 @@ for n,p,e in [
 	'''),
 	[[('root@havanna.moduleworks.com:~$ echo "hello world"', 0)]]
 	),
+	(13, unindent('''
+		$ pip --help
+	'''),
+	[[('$ pip --help', 0)]]
+	),
 	]:
 
 	setattr(TestXikiPath, 'test_xiki_path_%s' % n, gen_test_xiki_path(p, e))

@@ -50,6 +50,61 @@ Random Notes
 TODO
 ----
 
+[ ] output in rst mode. This means if indentation increases, there must be
+    inserted an empty line in output tree, such that it is rendered right.
+
+[ ] Add a "snippet" tag in menus
+    ::
+
+        - contacts
+          * add
+            - first name: $1
+            - last name : $2
+            - aliases:
+              - ${$1.$2@some.domain}
+              - all@some.domain
+
+    The star means two things:  Insert in snippet mode and insert expanded 
+    tree instead of collapsing in this example aliases item.
+
+    So hitting ``ctrl+enter`` on add line in ::
+
+        + contacts/add
+
+
+    Will result in::
+
+        - contacts/add
+          - first name: $1
+          - last name : $2
+          - aliases:
+            - ${$1.$2@some.domain}
+            - all@some.domain
+
+    For handling this form there will be something like::
+
+    class Contacts(XikiMenu):
+
+      def add(self, input):
+          dict = self.parse(input)
+
+
+    If you define a class in camel case it will correspond to a lowercase line
+    in menu.
+
+      - my contacts
+
+    will call ``my_contacts`` which may be created by a class named MyContacts.
+
+    So:
+
+    1. Either you create my_contacts function in your module, or you create
+       a class MyContacts derived from XikiMenu, which is automatically 
+       instantiated as my_contacts.
+
+
+
+
 - ctrl+a,ctrl+m => "as menu" to turn::
 	  foo/
 	    - bar/

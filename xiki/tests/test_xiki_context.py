@@ -4,7 +4,7 @@ if __name__ == '__main__':
 	sys.path.insert(0, abspath(join(dirname(__file__), '..')))
 	import test
 
-from unittest import TestCase
+from unittest import TestCase, skip
 
 from ..path import XikiPath
 from ..core import XikiContext, ConsoleXiki
@@ -48,6 +48,7 @@ class TestXikiContext(TestCase):
 			"{})\n" 
 			])
 
+	@skip
 	def test_ssh_root(self):
 		self._test_xiki_path("user@host.com:1234//foo/bar", [
 			"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F', '/foo/bar'), "

@@ -71,12 +71,20 @@ def os_open(path, opener):
 	p = subprocess.Popen([opener, path])
 	p.wait()
 
-def unindent(s):
+def unindent(s, hang=False):
 	if not isinstance(s, str):
 		return s
 
-	if s.startswith("\n"):
-		s = s[1:]
+	if hang:
+		first_line, s = s.split("\n", 1)
+		first_line += "\n"
+		if first_line == "\n":
+			first_line = ""
+	else:
+		first_line = ""
+		if s.startswith("\n"):
+			s = s[1:]
+
 	indent = INDENT_RE.match(s).group(0)
 	indent_len = len(indent)
 
@@ -87,7 +95,7 @@ def unindent(s):
 		else:
 			r.append(line)
 
-	return ''.join(r)
+	return first_line+''.join(r)
 
 NON_ESCAPE_CHARS = re.compile(r'^[\w\-/\.=~]+$')
 def cmd_string(args):

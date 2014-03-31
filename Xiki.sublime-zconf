@@ -4,6 +4,11 @@
 xiki = false
 
 //=
+// XikiShellMode
+//
+xiki_shell_mode = true
+
+//=
 // Use double click to run command
 //
 xiki_double_click = false
@@ -56,5 +61,16 @@ xiki_opener = xdg-open
 ctrl+enter [
   setting.xiki == true
   ] :: xiki
+
+enter [
+  setting.xiki == true
+  setting.xiki_shell_mode == true
+] :: xiki
+.
+ctrl+shift+enter [
+  setting.xiki == true
+  ] :: xiki
+  cont = true
+.
 
 Xiki IDE :: xiki_ide

@@ -35,6 +35,7 @@ class XikiNodeHandler(XikiAction):
 
 	from .util import is_text_file
 
+
 class XikiFileOpener(XikiAction):
 	LINE = re.compile(r'^(?P<path>\./|~/|(?:[A-Z]:)?/)$')
 
