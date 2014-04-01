@@ -80,6 +80,8 @@ class BaseXiki:
 		self.cache_dir    = tempfile
 		self.storage      = {}
 
+		self.last_exit_code = {}
+
 		if platform.system() == 'Windows':
 			if "great" == self.exec_output("bash", "echo", "great").strip():
 				self.shell = ['bash', '-c']
@@ -100,7 +102,6 @@ class BaseXiki:
 		self.static_vars       = {}
 		self.default_storage   = 'home'
 		self.default_extension = '.xiki'
-		self.last_exit_code = {}
 
 	def contexts(self):
 		for ctx in XikiContext:

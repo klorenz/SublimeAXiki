@@ -10,7 +10,10 @@ INDEX_RE          = re.compile(r'\[(\d+)\](?=/|$)')
 BULLET_RE         = re.compile(r'[\-–—+]\s')
 CONTEXT_RE        = re.compile(r'[@$]')
 NODE_LINE_1       = re.compile(r'(?x) (?P<indent>\s*) @ \s* (?P<node>.*) ')
-NODE_LINE_2       = re.compile(r'(?x) (?P<indent>\s*) (?P<node>\$ .*) ')
+INDENT_RE         = re.compile(r'^[\x20\t]*')
+
+FREE_LINE         = re.compile(r'(?x) (?P<indent>\s*) (?P<node>[^\-–—+].*)')
+# NODE_LINE_2       = re.compile(r'(?x) (?P<indent>\s*) (?P<node>\$ .*) ')
 NODE_LINE_COMMENT = re.compile(r'(?x) \s+(?:--|—|–)\s+.*$')
 PATH_SEP          = re.compile(r'(?:/| -> | → )')
 
@@ -27,13 +30,12 @@ def match_node_line(s):
 			'node'  : [ m.group('node') ],
 		}
 
-	m = NODE_LINE_2.match(s)
-	if m:
-		return {
-			'indent': m.group('indent'),
-			'ctx'   : '$',
-			'node'  : [ m.group('node') ],
-		}
+	# if FREE_LINE.match(s):
+	# 	return {
+	# 		'indent': m.group('indent'),
+	# 		'ctx'   : '@',
+	# 		'node'  : [ m.group('node') ],
+	# 	}
 
 	r = { 'indent' : get_indent(s), 'ctx': None}
 	m = NODE_LINE_COMMENT.search(s)
@@ -246,7 +248,14 @@ class XikiPath:
 
 			mob  = match_node_line(line)
 
-			if not mob: continue
+			if not mob:
+				if indent is None:
+					m = INDENT_RE.match(line)
+					indent = m.group(0)
+					node_paths[-1].append( (line.strip(),0) )
+					node_paths.append([])
+
+				continue
 
 			_indent = mob['indent']
 

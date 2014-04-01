@@ -126,6 +126,7 @@ class SublimeXiki(BaseXiki):
 		self.plugin_root  = "Packages/"
 		self.user_root    = "Packages/User/aXiki/"
 		self.register_plugin('aXiki/xiki')
+		self.register_plugin('aXiki')
 
 	def path_exists(self, path):
 		if path.startswith('Packages/'):
@@ -203,6 +204,7 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 	def __init__(self, xiki, view=None, line_region=None, tree=None, cont=False,sel=None):
 		ProxyXiki.__init__(self, xiki)
 		self.view        = view
+		self.window      = view.window()
 		self.line_region = line_region
 		self.tree        = tree
 		self.cont        = cont
@@ -319,7 +321,7 @@ class XikiHandlerThread(threading.Thread):
 		with Edit(view) as edit:
 			try:
 				p = view.full_line(pos)
-				edit.insert(p.end()-1, "\n"+''.join([indent+l for l in output.splitlines(1)]))
+				edit.insert(p.end()-1, "\n"+''.join([indent+l for l in output.splitlines(1)])[:-1])
 				#insert(view, edit, pos, output, indent=self.indent)
 			except:
 				log.error('error writing output', exc_info=1)
@@ -340,6 +342,14 @@ class XikiHandlerThread(threading.Thread):
 			elif not self.context.prompt():
 				normal_enter = True
 
+			if self.context:
+				prompt = self.context.prompt().lstrip()
+				log.debug("prompt: %s", repr(prompt))
+				line = self.view.substr(self.view.line(self.xiki.sel))
+				log.debug("line: %s", repr(line))
+				if not line.lstrip().startswith(prompt):
+					normal_enter = True
+
 			log.debug("Normal Enter: %s", normal_enter)
 			if normal_enter:
 				b = self.xiki.sel.begin()
@@ -348,15 +358,24 @@ class XikiHandlerThread(threading.Thread):
 
 				self.view.sel().subtract(self.xiki.sel)
 
+				# restore_sel = []
+				# for sel in list(self.view.sel()):
+				# 	if e in (sel.begin(), sel.end()):
+				# 		restore_sel.append(sel)
+				# 		view.sel().subtract(sel)
+
 				with Edit(self.view) as edit:
 					edit.replace(self.xiki.sel, "\n")
 
-				if b != e:
-					log.debug("add: %s, %s", b, b+1)
-					self.view.sel().add(sublime.Region(b, b+1))
-				else:
-					log.debug("add: %s", b+1)
-					self.view.sel().add(sublime.Region(b+1))
+					def _restore_sel():
+						if b != e:
+							log.debug("add: %s, %s", b, b+1)
+							self.view.sel().add(sublime.Region(b, b+1))
+						else:
+							log.debug("add: %s", b+1)
+							self.view.sel().add(sublime.Region(b+1))
+
+					edit.callback(_restore_sel)
 
 				return
 
@@ -457,11 +476,12 @@ class XikiHandlerThread(threading.Thread):
 					buf.append("\n")
 				self._append_output()
 
-		if self.view.settings().get('xiki_shell_mode', True):
-			if self.context:
-				prompt = self.context.prompt()
-				if prompt:
-					self._insert_snippet(self.indent+str(prompt)+"$0\n")
+		if self.xiki.cont:
+			if self.view.settings().get('xiki_shell_mode', True):
+				if self.context:
+					prompt = self.context.prompt()
+					if prompt:
+						self._insert_snippet(self.indent+str(prompt).replace('$', '\\$')+"$0\n")
 
 		# if self.cont:
 		# 	if isinstance(self.cont, Snippet):

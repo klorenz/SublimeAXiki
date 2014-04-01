@@ -203,6 +203,7 @@ class XikiMenuFiles:
 			m = imp.new_module(mod_name)
 			m.__file__ = path_name
 			m.__dict__['xiki'] = self.xiki
+			m.__dict__['XikiContext'] = XikiContext
 
 			if ext == '.py':
 				source = self.xiki.read_file(path_name)
@@ -355,11 +356,16 @@ class menu(XikiContext):
 		#import spdb ; spdb.start()
 		if hasattr(self.menu, 'menu'):
 			func = getattr(self.menu, 'menu')
-			if func.func_code.co_argcount == 0:
+			if hasattr(func, 'func_code'):
+				code = func.func_code
+			else:
+				code = func.__code__
+
+			if code.co_argcount == 0:
 				output = func()
-			elif func.func_code.co_argcount == 1:
+			elif code.co_argcount == 1:
 				output = func(self)
-			elif func.func_code.co_argcount == 2:
+			elif code.co_argcount == 2:
 				output = func(self, input)
 			else:
 				raise NotImplementedError("too many arguments")
@@ -568,11 +574,12 @@ class ssh(XikiContext):
 			return self.context.execute(*(cmd + args))
 
 class root(XikiContext):
+
 	def root_menuitems(self):
 		return None
 
 	def does(self,xiki_path):
-		return not xiki_path
+		return not ''.join(xiki_path).strip()
 
 	def menu(self):
 		result = []
@@ -594,7 +601,7 @@ class XikiShell(XikiContext):
 
 class XikiExec(XikiContext):
 	PATTERN = re.compile(r'^\s*\$\s+(.*)')
-	PS1     = "\$ "
+	PS1     = "$ "
 
 	COMMAND_RE = re.compile(r'''(?x)
 		(?:^|(?<=\s))
@@ -620,16 +627,26 @@ class XikiExec(XikiContext):
 
 		return result
 
+	def is_shell_command(self, cmd):
+		for a in cmd:
+			if a == '|': return True
+			if a == ">": return True
+			if a.startswith('1>'): return True
+			if a.startswith('2>'): return True
+		return False
+
 	def open(self, input=None, cont=None):
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		s = self.mob.group(1)
 		log.debug("%s: %s, %s", self, s, self.node_path)
+		if not s.strip():
+			return ""
 
-		#if self.node_path:
-		#	self.context.mkdir(*self.node_path)
-		#	self.context.setcwd('/'.join(self.node_path))
-
-		return self.context.execute(*self.parse_command(s))
+		cmd = self.parse_command(s)
+		if self.is_shell_command(cmd):
+			self.context.shell_execute(*self.parse_command(s))
+		else:
+			return self.context.execute(*self.parse_command(s))
 
 class XikiPython(XikiContext):
 	PATTERN = re.compile(r'>>> (.*)')
@@ -678,3 +695,4 @@ class XikiPython(XikiContext):
 			return [ pprint.pformat(r) ]
 		else:
 			return _output.readlines()
+
