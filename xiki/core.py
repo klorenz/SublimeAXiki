@@ -3,23 +3,23 @@
 if __name__ == '__main__':
 	import test
 
-import logging, re, os, time, subprocess, platform, threading
+import logging, re, os, time, subprocess, platform, threading, sys
 log = logging.getLogger('xiki.core')
 
 from .util import *
-from .path import XikiPath
+from .path import XikiPath, BULLET_RE
 
 # from six.py
 def add_metaclass(metaclass):
-    """Class decorator for creating a class with a metaclass."""
-    def wrapper(cls):
-        orig_vars = cls.__dict__.copy()
-        orig_vars.pop('__dict__', None)
-        orig_vars.pop('__weakref__', None)
-        for slots_var in orig_vars.get('__slots__', ()):
-            orig_vars.pop(slots_var)
-        return metaclass(cls.__name__, cls.__bases__, orig_vars)
-    return wrapper
+	"""Class decorator for creating a class with a metaclass."""
+	def wrapper(cls):
+		orig_vars = cls.__dict__.copy()
+		orig_vars.pop('__dict__', None)
+		orig_vars.pop('__weakref__', None)
+		for slots_var in orig_vars.get('__slots__', ()):
+			orig_vars.pop(slots_var)
+		return metaclass(cls.__name__, cls.__bases__, orig_vars)
+	return wrapper
 
 os_path_exists = os.path.exists
 os_path_join   = os.path.join
@@ -72,8 +72,261 @@ class XikiFileAlreadyExists(XikiError):
 class XikiLookupError(XikiError):
 	pass
 
+
+PY3 = sys.version_info[0] >= 3
+
+
+def exec_code(code, globals=None, locals=None):
+	if PY3:
+		import builtins
+		getattr(builtins, 'exec')(code, globals, locals)
+		exec(code, globals, locals)
+	else:
+		#frame = sys._getframe()
+		exec(code, globals, locals)
+		#eval("exec code in globals, locals", frame.f_globals, frame.f_locals)
+
+class XikiExtensions:
+
+	def __init__(self, xiki):
+		self.nodes = {}
+		self.dirs  = set()
+		self.path = set()
+		self.xiki = xiki
+		self.titles = {}
+
+	def __getitem__(self, name):
+		#import spdb ; spdb.start()
+
+		if name in self.nodes:
+			return self.nodes[name]
+
+		if name in self.titles:
+			return self.titles[name]
+
+		slashed_name = name + "/"
+		result = set()
+		log.debug("keys nodes: %s" % self.nodes.keys())
+		for d in self.titles:
+			if d.startswith(slashed_name):
+				result.add("+ "+d.split('/', 2)[1]+"\n")
+		return ''.join(result)
+
+	def get_title(self, docstring):
+		line = 1
+		title, doc = docstring.split("\n", 1)
+		if doc:
+			if doc[0].isalnum():
+				title = name
+				doc = docstring
+				line = 0
+
+
+		# elif doc[0] != "\n" and not doc[0].isalnum():
+		# 	doc = doc.split("\n", 1)[1]
+		# 	line = 2
+
+		# i = 0
+		# while doc[i].isspace():
+		# 	if doc[i] == "\n":
+		# 		line += 1
+		# 	i += 1
+		# if i:
+		# 	doc = doc[i:]
+
+		log.debug("get_title: %s, %s, %s", title, doc, line)
+		return title, doc, line
+
+	def add_files_from_path(self, root):
+		if root in self.path:
+			return
+
+		root_len = len(root)+1
+		import imp
+
+		mod_base = 'xiki.%s' % self.xiki.name
+
+		if mod_base not in sys.modules:
+			sys.modules[mod_base] = imp.new_module(mod_base)
+
+		mod_base = 'xiki.%s.ext' % self.xiki.name
+
+		if mod_base not in sys.modules:
+			sys.modules[mod_base] = imp.new_module(mod_base)
+
+		for path_name in self.xiki.walk(root):
+			node_name = path_name[root_len:]
+			name, ext = os.path.splitext(os.path.basename(path_name))
+			node_name = os.path.splitext(node_name)[0]
+			dir_name  = os.path.dirname(node_name)
+
+			if node_name in self.nodes:
+				m = self.nodes[node_name]
+				if self.xiki.getmtime(path_name) < m.time_created:
+					continue
+				else:
+					if hasattr(m, 'unload'):
+						m.unload()
+
+			d = os.path.dirname(node_name)
+			parts = d.split('/')
+			for i,p in enumerate(parts, start=1):
+				_dir = '/'.join(parts[:i])
+				if not _dir: continue
+				self.dirs.add(_dir)
+
+			mod_name = '%s.%s' % (mod_base, '.'.join(parts))
+
+			m = imp.new_module(mod_name)
+			m.__file__ = path_name
+			m.xiki = self.xiki
+			m.XikiContext = XikiContext
+			m.XikiPath = XikiPath
+			m.log = logging.getLogger(mod_name)
+			m.os  = os
+			m.sys = sys
+			m.re  = re
+			m.time_created = time.time()
+
+#			import spdb ; spdb.start()
+
+			if ext == '.py':
+				title = name
+
+				source = self.xiki.read_file(path_name)
+				code = compile(source, node_name, 'exec')
+
+				exec_code(code, m.__dict__)
+
+				sys.modules[mod_name] = m
+
+				if not hasattr(m,'menu'):
+
+					if hasattr(m, 'Menu'):
+						m.menu = m.Menu()
+						if not callable(m.menu):
+							m.menu.__call__ = lambda: m.Menu.__doc__
+
+					if m.__doc__:
+
+						title, doc, line_offset = self.get_title(m.__doc__)
+						m.menu = lambda: doc
+
+					else:
+						def _sym_menu(mod):
+							def menu(ctx):
+								import types
+								result = []
+								for a in dir(mod):
+									if isinstance(a, types.ClassType):
+										if issubclass(a, XikiContext):
+											result.append("+ %s\n" % a)
+										elif callable(a):
+											result.append("+ %s\n" % a)
+									elif callable(a):
+										result.append("+ %s\n" % a)
+								return ''.join(result)
+							return menu
+						m.menu = _sym_menu(m)
+
+
+			else:
+				source = self.xiki.read_file(path_name)
+
+				title, doc, line_offset = self.get_title(source)
+				m.menu = lambda: doc
+
+				menu   = []
+				pycode = []
+				is_python = False
+				
+				for i,line in enumerate(doc.splitlines(1)):
+					if is_python:
+						if not line.strip():
+							pycode.append(line)
+						else:
+							indent = get_indent(line)
+
+							if len(indent) <= len(pycode_indent):
+
+								code = compile("\n"*line_offset+unindent(''.join(pycode)), filename=path_name, mode='exec')
+								exec_code(code, m.__dict__)
+								is_python = False
+								menu.append(line)
+								pycode = []
+								continue
+
+							pycode.append(line)
+
+						continue
+
+					try:
+						stripped = line.strip()
+
+						if stripped.startswith('class ') or stripped.startswith('def '):
+							pycode_indent = get_indent(line)
+							pycode.append(line)
+							is_python = True
+							line_offset = i
+
+							# pop indicating line in restructured text
+							if len(menu) > 2:
+								if menu[-2].endswith('::\n') and not menu[-1].strip():
+									menu.pop()
+									menu.pop()
+									# and remove empty lines before
+									while not menu[-1].strip():
+										menu.pop()
+
+						else:
+							menu.append(line)
+
+					except (OverflowError, SyntaxError, ValueError):
+						menu.append(line)
+						continue
+
+				if is_python:
+#					import spdb ; spdb.start()
+					code = compile("\n"*line_offset+unindent(''.join(pycode)), filename=path_name, mode='exec')
+					exec_code(code, m.__dict__)
+
+				if menu:
+					def _menu(menu):
+						return lambda: ''.join(menu)
+					m.menu = _menu(menu)
+
+			m.title = lambda: title
+			self.titles["%s/%s" % (dir_name, title)] = m
+
+			self.nodes[node_name] = m
+			for k,v in self.nodes.items():
+				log.debug("%s: %s" %(k,v.__file__))
+
+		self.path.add(root)
+
+	def __contains__(self, name):
+		return name in self.nodes or name in self.dirs or name in self.titles
+
+	def __iter__(self):
+		log.debug("dirs: %s", self.dirs)
+		log.debug("node_keys: %s", self.nodes.keys())
+		for n in self.dirs.union(set(self.titles.keys())):
+			yield n
+
+	def update(self, extdir):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+		for menu_dir in self.xiki.get_search_path(extdir):
+			log.debug("menu: updating from %s", menu_dir)
+			self.add_files_from_path(menu_dir)
+
+
+
 class BaseXiki:
-	def __init__(self):
+	def __init__(self, name=None):
+		if name is None:
+			name = self.__class__.__name__
+		self.name = name
+
 		import tempfile
 		self.plugins      = {}
 		self.search_paths = {}
@@ -102,14 +355,33 @@ class BaseXiki:
 		self.static_vars       = {}
 		self.default_storage   = 'home'
 		self.default_extension = '.xiki'
+		self.extension_dir = 'menu'
+		self._extensions = XikiExtensions(self)
+
+	def exec_code(self, code, globals=None, locals=None):
+		return exec_code(code, globals, locals)
+
+	def extensions(self):
+		self._extensions.update(self.extension_dir)
+		return self._extensions
 
 	def contexts(self):
-		for ctx in XikiContext:
-			yield ctx
+		for ctx in list(XikiContext):
+			if ctx.__module__.startswith('xiki.contexts'):
+				yield ctx
+			if ctx.__module__.endswith('.xiki.contexts'):
+				yield ctx
+			if ctx.__module__.startswith('xiki.%s' % self.name):
+				yield ctx
+
+		yield default
 
 	def parse_data(self, string):
 		from .parser import parse
 		return parse(string)
+
+	def getmtime(self, path):
+		return os.path.getmtime(path)
 
 	def isroot(self):
 		if isinstance(self, BaseXiki):
@@ -136,6 +408,14 @@ class BaseXiki:
 	def write_file(self, filepath, content):
 		with open(filepath, 'w') as f:
 			f.write(content)
+
+	def change_bullet(self, line, bullet):
+		'''exchanges the bullet from line, if it is a bullet'''
+		line = line.strip()
+		b = BULLET_RE.match(line)
+		if b:
+			return bullet+line[1:]
+		return None
 
 	def prompt(self):
 		if hasattr(self, 'PS1'):
@@ -275,11 +555,15 @@ class BaseXiki:
 
 	def walk(self, root):
 		for dir, dirs, files in os_walk(root):
+			if '.git' in dirs: dirs.remove('.git')
+			if '.hg'  in dirs: dirs.remove('.hg')
+			if '.svn' in dirs: dirs.remove('.svn')
 			for fn in files:
 				fn = os_path_join(dir, fn).replace('\\', '/')
 				yield fn
 
 	def register_plugin(self, name, root=None):
+
 		if root is None:
 			root = self.plugin_root
 
@@ -288,10 +572,13 @@ class BaseXiki:
 				self.register_plugin(name, r)
 			return
 
+		log.info("register plugin %s -> %s", name, root)
+
 		res_location = "%s/%s/" % (root, name)
 		loclen = len(res_location)
 
-		self.plugins[name] = {'files': set(), 'root': res_location[:-1] }
+		if name not in self.plugins:
+			self.plugins[name] = {'files': set(), 'root': res_location[:-1] }
 
 		for r in self.walk(root):
 			if r.startswith(res_location):
@@ -320,9 +607,11 @@ class BaseXiki:
 		return search_path
 
 	def open(self, path, input=None, cont=False):
+		self.extensions()
 		return XikiPath(path).open(self, input=input, cont=cont)
 
 	def close(self, path, input=None):
+		self.extensions()
 		return XikiPath(path).close(self, input=input)
 
 	def execute(self, *args, **kargs):
@@ -332,13 +621,33 @@ class BaseXiki:
 		if 'cwd' not in kargs:
 			kargs['cwd'] = self.getcwd()
 
-		# get_result = False
-		# if 'result' in kargs:
-		# 	get_result = kargs.get('result')
-		# 	del kargs['result']
+		stdin = None
+		if 'input' in kargs:
+			if kargs['input'] is not None:
+				stdin = kargs['input']
+				kargs['stdin'] = subprocess.PIPE
+
+			del kargs['input']
+
+		log.info("kargs: %s", kargs)
+
+		if subprocess.mswindows:
+			su = subprocess.STARTUPINFO()
+			su.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+			su.wShowWindow = subprocess.SW_HIDE
+			kargs['startupinfo'] = su
 
 		p = subprocess.Popen( list(args), stdout = subprocess.PIPE, 
 			stderr = subprocess.STDOUT, **kargs )
+
+		if stdin:
+			import errno
+			try:
+				p.stdin.write(stdin.encode('utf-8'))
+			except IOError as e:
+				if e.errno != errno.EPIPE:
+					raise
+			p.stdin.close()
 
 		for line in iter(p.stdout.readline,''):
 			log.debug("got line: %s", line)
@@ -368,8 +677,9 @@ class BaseXiki:
 		output = ''.join([ x for x in self.execute(*args, **kargs)])
 		return self.last_exit_code[threading.current_thread().name]
 
-	def shell_execute(self, *args):
-		return self.execute( *(self.shell + cmd_string(args)) )
+	def shell_execute(self, command, **kargs):
+		return self.execute( *(self.shell + [command]), **kargs )
+		return self.execute( *(self.shell + [cmd_string(command, quote="'")]), **kargs )
 
 class MemXiki(BaseXiki):
 	STORAGE = {}
@@ -410,6 +720,7 @@ class ProxyXiki:
 		self.xiki = xiki
 
 	def __getattr__(self, name):
+		log.debug("proxy: %s", name)
 		return getattr(self.xiki, name)
 
 
@@ -586,8 +897,10 @@ class XikiContext(XikiBase):
 			if callable(self.CONTEXT):
 				return self.CONTEXT(xiki_path)
 
+		log.debug("?? %s == %s", self.__class__, xiki_path[0])
 		if str(self.__class__) == xiki_path[0]:
 			self.xiki_path = xiki_path[1:]
+			return True
 
 		return False
 
@@ -603,7 +916,7 @@ class XikiContext(XikiBase):
 			return self
 
 	def root_menuitems(self):
-		return str(self)+"\n"
+		return ""
 
 	def menu(self):
 		if hasattr(self, '__doc__'):
@@ -613,12 +926,21 @@ class XikiContext(XikiBase):
 
 	def open(self, input=None, cont=None):
 		if self.xiki_path:
+			log.debug("open: redirect")
 			return self.xiki_path.open(context=self, input=input, cont=cont)
 		return self.menu()
 
+	def expanded(self, input=None, cont=None):
+		return self.open(input=input, cont=cont)
+
 	def close(self, input=None):
 		if self.xiki_path:
-			return self.xiki_path.close(context=self, input=input)
+			try:
+				log.debug("close: redirect")
+				return self.xiki_path.close(context=self, input=input)
+			except LookupError:
+				return None
+
 
 	def full_expand(self, *args, **kargs):
 		return self.expand(*args, **kargs)
@@ -632,10 +954,23 @@ class XikiContext(XikiBase):
 	def collapse(self, input=None, *args, **kargs):
 		return None
 
+
 	@classmethod
 	def loaded(cls):
-		'''implement this to do something after this function is loaded'''
+		'''implement this to do something after this class is loaded'''
 
 	@classmethod
 	def unload(cls):
 		'''implement this function if you have to unload anything'''
+
+def default(XikiContext):
+	def does(self, path):
+		self.my_path = path
+		return True
+
+	def menu(self):
+		return "There is no context to handle %s" % self.my_path
+
+if hasattr(XikiContext, 'registry'):
+	if 'default' in XikiContext.registry:
+		del XikiContext.registry['default']

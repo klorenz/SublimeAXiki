@@ -98,17 +98,45 @@ def unindent(s, hang=False):
 	return first_line+''.join(r)
 
 NON_ESCAPE_CHARS = re.compile(r'^[\w\-/\.=~]+$')
-def cmd_string(args):
+def cmd_string(args, quote='"'):
 	if isinstance(args, str):
 		args = [args]
 	r = []
 	for a in args:
-		if not NON_ESCAPE_CHARS.match(a):
-			r.append('"'+a.replace('\\', '\\\\').replace('"', '\\"')+'"')
+		if a == '|':
+			r.append(a)
+		elif a.startswith('1>'):
+			r.append(a)
+		elif a.startswith('2>'):
+			r.append(a)
+		elif a == '>':
+			r.append(a)
+		elif a == '<':
+			r.append(a)
+		elif a.startswith('-'):
+			r.append(a)
+		elif not NON_ESCAPE_CHARS.match(a):
+			q = quote
+			r.append(q+a.replace('\\', '\\\\').replace(q, '\\'+q)+q)
 		else:
 			r.append(a)
+
 	return ' '.join(r)
 
+def indent(s, indent="", hang=False):
+	if not isinstance(s, str):
+		if not isinstance(s, list):
+			s = [y for y in s]
+		s = ''.join(s)
+
+	s = indent.join(s.splitlines(1))
+
+	if hang:
+		return s
+	else:
+		return indent+s
+
+indent_lines = indent
 
 def find_lines(context, text, node_path):
 	from .core import XikiPath, INDENT
@@ -129,6 +157,7 @@ def find_lines(context, text, node_path):
 
 	#import spdb ; spdb.start()
 
+	path_i = 0
 	i = -1
 	while i < len(lines):
 		i += 1
@@ -151,8 +180,8 @@ def find_lines(context, text, node_path):
 					line = line[len(ind):]
 
 					if line.startswith('<< '):  # insert
-						insert = XikiPath(line[2:].strip()).expand(context)
-						result.append(insert)
+						insert = XikiPath(line[2:].strip()).open(context)
+						result.append(indent_lines(insert, ind))
 					else:
 						if line.startswith('- '):
 							line = '+'+line[1:]
@@ -189,7 +218,7 @@ def find_lines(context, text, node_path):
 		if not line.startswith(indentation[-1]):
 			indentation.pop()
 			need_indent = False
-			i -= 1
+			path_i -= 1
 			break
 
 		indent = get_indent(line)
@@ -200,7 +229,7 @@ def find_lines(context, text, node_path):
 			if len(indent) > len(indentation[-1]):
 				indentation.append(indent)
 
-				if i >= len(path):
+				if path_i >= len(path):
 					collecting = True
 					if line[0] == '-':
 						line = '+'+line[1:]
@@ -216,20 +245,20 @@ def find_lines(context, text, node_path):
 			need_indent = False
 
 			# there is no indented line here
-			if i >= len(path):
+			if path_i >= len(path):
 				# if we allowed multiple items in a list, we had to backtrack
 				# here maybe, but for now we are done, because there is no 
 				# input
 				return ""
 
 		if line.startswith('<<'):
-			insert = XikiPath(line[2:].strip()).full_expand(context)
-			lines[i:i+1] = [ indent+l for l in insert.splitlines(1) ]
+			insert = XikiPath(line[2:].strip()).expanded(context)
+			lines[i:i+1] = indent_lines(insert, indent).splitlines(1)
 			continue
 
 		if line.startswith('+'):
 			raise NotImplementedError("not yet implemented")
-			insert = XikiPath(line[2:].strip()).full_expand(context)
+			insert = XikiPath(line[2:].strip()).expanded(context)
 			lines[i:i+1] = [ indent + '-' + line[1:]+"\n"]
 			lines[i+1:i+2] = [ indent+INDENT+l for l in insert.splitlines(1) ]
 
@@ -245,17 +274,19 @@ def find_lines(context, text, node_path):
 			if ':' in _line:
 				_line = _line.split(':', 1)[0]
 
-			if _line != path[i]:
+			if _line != path[path_i]:
 				continue
 
-			if _line == path[i]:
+			if _line == path[path_i]:
 				if command:
-					insert = XikiPath(command).full_expand(context)
+					insert = XikiPath(command).expanded(context)
 					_indent = indent + INDENT
-					lines[i+1:i+2] = [ _indent+l for l in insert.splitlines(1) ]
+					lines[i+1:i+2] = indent_lines(insert, _indent).splitlines(1)
 				else:
-					i += 1
+					path_i += 1
 					need_indent = True
+
+	log.debug("result: %s", result)
 
 	return ''.join(result).rstrip()+"\n"
 

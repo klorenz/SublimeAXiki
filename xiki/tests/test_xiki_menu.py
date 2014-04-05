@@ -9,15 +9,15 @@ from unittest import TestCase
 
 from ..path import XikiPath
 from ..core import XikiContext, MemXiki
-from ..contexts import XikiMenuFiles
+# from ..contexts import XikiMenuFiles
 
 class MyXiki(MemXiki):
 
 	def __init__(self,*args, **kargs):
 		MemXiki.__init__(self,*args,**kargs)
-		self.menu_files = XikiMenuFiles(self)
+#		self.menu_files = XikiMenuFiles(self)
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-		self.menu_files.update()
+#		self.menu_files.update()
 
 	MY_STORAGE = {}
 	def getcwd(self):

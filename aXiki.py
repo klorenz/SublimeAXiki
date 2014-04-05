@@ -120,16 +120,44 @@ def apply_xiki_settings(view):
 	settings.set('translate_tabs_to_spaces', True)
 	settings.set('syntax', 'Packages/SublimeXiki/Xiki.tmLanguage')
 
+started = time.time()
+
 class SublimeXiki(BaseXiki):
 	def __init__(self):
 		BaseXiki.__init__(self)
-		self.plugin_root  = "Packages/"
-		self.user_root    = "Packages/User/aXiki/"
+		self.plugin_root  = "Packages"
+		self.user_root    = "Packages/User/aXiki"
 		self.register_plugin('aXiki/xiki')
 		self.register_plugin('aXiki')
 
-	def path_exists(self, path):
+	def is_packages(self, path):
+		return path == "Packages" or path.startswith('Packages/')
+
+	def walk(self, path):
+		log.debug("walk path %s", path)
+		if self.is_packages(path):
+			slashed_p = path
+			if not slashed_p.endswith('/'):
+				slashed_p += "/"
+
+			for r in sublime.find_resources('*'):
+				if r.startswith(slashed_p):
+					yield r
+		else:
+			BaseXiki.walk(self, path)
+
+	def getmtime(self, path):
+		if path.startswith('Packages/aXiki'):
+			_path = sublime.packages_path()
+			path = os.path.join(_path, path[9:])
+			if os.path.exists(path):
+				return os.path.getmtime(path)
+			return started
 		if path.startswith('Packages/'):
+			return started
+
+	def path_exists(self, path):
+		if self.is_packages(path):
 			slashed_p = path
 			if not slashed_p.endswith('/'):
 				slashed_p += "/"
@@ -142,9 +170,17 @@ class SublimeXiki(BaseXiki):
 		return BaseXiki.path_exists(self, path)
 
 	def read_file(self, path):
-		if path.startswith('Packages/'):
+		log.debug("reading %s", path)
+		if self.is_packages(path):
 			return sublime.load_resource(path)
 		return BaseXiki.read_file(self, path)
+
+	def open_file(self, path, opener=None, text_opener=None, bin_opener=None):
+		if path.startswith('Packages/'):
+			path = '${packages}/'+path[9:]
+
+		BaseXiki.open_file(path, opener=opener, text_opener=text_opener, 
+			bin_opener=bin_opener)
 
 	def __call__(self, view, action="default", cont=False, handle_input=False):
 		'''Interface to Sublime Text.
@@ -161,11 +197,15 @@ class SublimeXiki(BaseXiki):
 			# get tree for current node
 			lr = line_region
 			indent = get_indent(view, lr.begin())
-			while lr.begin()-1 > 0 and indent:
-				lr = view.line(lr.begin()-1)
-				_indent = get_indent(view, lr)
-				if len(_indent) == 0:
-					break
+			if line.strip():
+				while lr.begin()-1 > 0 and indent:
+					lr = view.line(lr.begin()-1)
+					_indent = get_indent(view, lr)
+					_line   = view.substr(lr).strip()
+					if not _line:
+						continue
+					if len(_indent) == 0:
+						break
 
 			path_region = sublime.Region(lr.begin(), line_region.end())
 			tree        = view.substr(path_region)
@@ -236,6 +276,7 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 			context = XikiPath(self.tree).context(self)
 			handler = context.open
 		except:
+			log.error("open", exc_info=1)
 			context = None
 			handler = None
 
@@ -246,6 +287,7 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 			xiki    = self, 
 			handler = handler, args=args, kwargs=kwargs,
 			context  = context,
+			bullet   = '-',
 			)
 		t.start()
 
@@ -256,7 +298,8 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 
 		t = XikiHandlerThread(self.view, self.line_region,
 			xiki    = self, 
-			handler = handler, args=args, kwargs=kwargs
+			handler = handler, args=args, kwargs=kwargs,
+			bullet  = '+',
 			)
 		t.start()
 
@@ -266,7 +309,7 @@ MULTISLASHES_RE = re.compile(r'//+')
 import threading
 class XikiHandlerThread(threading.Thread):
 	def __init__(self, view, region, xiki=None, handler=None, args=[], kwargs={},
-		context=None):
+		context=None, bullet=None):
 		threading.Thread.__init__(self)
 		if hasattr(handler, '__name__'):
 			name = handler.__name__
@@ -282,6 +325,7 @@ class XikiHandlerThread(threading.Thread):
 		self.view    = view
 		self.region  = region
 		self.context = context
+		self.bullet  = bullet
 
 		self.indent = get_indent(view, region)
 
@@ -341,8 +385,7 @@ class XikiHandlerThread(threading.Thread):
 				normal_enter = True
 			elif not self.context.prompt():
 				normal_enter = True
-
-			if self.context:
+			elif self.context:
 				prompt = self.context.prompt().lstrip()
 				log.debug("prompt: %s", repr(prompt))
 				line = self.view.substr(self.view.line(self.xiki.sel))
@@ -384,7 +427,7 @@ class XikiHandlerThread(threading.Thread):
 
 		try:
 
-			log.debug("args: %s, kwargs: %s", self.args, self.kwargs)
+			log.debug("handler: %s, args: %s, kwargs: %s", self.handler, self.args, self.kwargs)
 			output = self.handler(*self.args, **self.kwargs)
 
 		except Exception as e:
@@ -423,7 +466,8 @@ class XikiHandlerThread(threading.Thread):
 		view.run_command('insert_snippet', {'contents': contents})
 
 	def _print_output(self, output):
-		line_to_replace = None
+		line = self.view.substr(self.region)
+		line_to_replace = self.xiki.change_bullet(line, self.bullet)
 
 		if isinstance(output, tuple):
 			# got first line + output
@@ -627,3 +671,12 @@ class XikiIde(sublime_plugin.WindowCommand):
 			'cols': [0.0, 0.33, 1.0]})
 
 		self.window.focus_group(min(active_group), 3)
+
+def plugin_loaded():
+	setattr(sys.modules['__main__'], 'xiki', xiki)
+	# make sure extensions are up-to-date
+	xiki.extensions()
+
+def plugin_unloaded():
+	if hasattr(sys.modules['__main__'], 'xiki'):
+		delattr(sys.modules['__main__'], 'xiki')

@@ -119,7 +119,11 @@ class XikiPath:
 					yield p[0]
 
 	def __len__(self):
-		return len(self.path)
+		if self.paths:
+			return len(self.paths)
+		if self.path:
+			return len(self.path)
+		return 0
 
 	def __nonzero__(self):
 		if self.paths:
@@ -225,6 +229,10 @@ class XikiPath:
 		indent = None
 		from itertools import chain
 
+		lines = lines.rstrip() + "\n"
+
+		log.debug("lines: %s" % lines)
+
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		for line in chain(reversed(lines.splitlines(1)), [None]):
 
@@ -255,6 +263,9 @@ class XikiPath:
 					node_paths[-1].append( (line.strip(),0) )
 					node_paths.append([])
 
+				continue
+
+			if not line.strip():
 				continue
 
 			_indent = mob['indent']
@@ -376,12 +387,17 @@ class XikiPath:
 				log.info("%s does %s", ctx, self)
 				return ctx.get_context()
 
-		raise LookupError("xiki context not found for %s" % self)
-
 	def open(self, context, input=None, cont=False):
 		context = self.context(context)
+		log.debug("open: %s <- %s", context, self)
 		return context.open(input=input, cont=cont)
+
+	def expanded(self, context, input=None):
+		context = self.context(context)
+		log.debug("open: %s <- %s", context, self)
+		return context.expanded(input=input, cont=cont)
 
 	def close(self, context, input=None):
 		context = self.context(context)
+		log.debug("close: %s <- %s", context, self)
 		return context.close(input=input)

@@ -1,3 +1,6 @@
+Getting Started with aXiki
+==========================
+
 Hit ``ctrl+enter`` on an empty line to get started.
 
 For getting started with Xiki you only have to remember following basic
@@ -14,8 +17,6 @@ things.
 
 - Hit ``ctrl+shift+enter`` on expanded line, will use indented lines as
   input for command.
-
-- Hit ``ctrl+y``
 
 If you make a change at a line and you want to save current context, hit 
 

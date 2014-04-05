@@ -9,8 +9,9 @@ This module lets you jump to a line of a file, displayed in a python traceback::
 			''')
 
 		def open(self, input=None, cont=None):
+			import sublime
 			g = self.mob.groupdict()
-			self.window.open_file("%s:%s:0" % g, sublime.ENCODED_POSITION)
+			self.window.open_file("%(file)s:%(line)s:0" % g, sublime.ENCODED_POSITION)
 
 ::
 
