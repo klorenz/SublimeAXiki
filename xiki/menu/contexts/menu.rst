@@ -3,8 +3,8 @@ Menu
 
 Handle Menus.  Menus are actually simple extensions to aXiki.
 
-
 ::
+
 	class menu(XikiContext):
 		''' Todo: find always right set of menu files, e.g. if switching projects
 		'''
@@ -45,9 +45,10 @@ Handle Menus.  Menus are actually simple extensions to aXiki.
 				return True
 
 			if menu is None:
-	#			if self.action.startswith('collapse'):
-	#				self.dispatch_path = node_path
-	#				return True
+
+		#			if self.action.startswith('collapse'):
+		#				self.dispatch_path = node_path
+		#				return True
 
 				return False
 

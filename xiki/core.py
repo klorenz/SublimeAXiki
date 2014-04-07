@@ -314,6 +314,7 @@ class XikiExtensions:
 			yield n
 
 	def update(self, extdir):
+		log.debug("updating from %s", extdir)
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		for menu_dir in self.xiki.get_search_path(extdir):
 			log.debug("menu: updating from %s", menu_dir)
@@ -366,7 +367,11 @@ class BaseXiki:
 		return self._extensions
 
 	def contexts(self):
+		default = None
 		for ctx in list(XikiContext):
+			if ctx.__name__ == "XikiDefaultContext":
+				default = ctx
+				continue
 			if ctx.__module__.startswith('xiki.contexts'):
 				yield ctx
 			if ctx.__module__.endswith('.xiki.contexts'):
@@ -585,8 +590,10 @@ class BaseXiki:
 				self.plugins[name]['files'].add(r[loclen:])
 
 	def get_search_path(self, name):
+		log.debug("search_paths: %s", self.search_paths)
 		if name in self.search_paths:
-			return self.search_paths[name]
+			if self.search_paths[name]:
+				return self.search_paths[name]
 
 		slashed_name = name
 		if not slashed_name.endswith('/'):
@@ -963,14 +970,10 @@ class XikiContext(XikiBase):
 	def unload(cls):
 		'''implement this function if you have to unload anything'''
 
-def default(XikiContext):
+class XikiDefaultContext(XikiContext):
 	def does(self, path):
 		self.my_path = path
 		return True
 
 	def menu(self):
 		return "There is no context to handle %s" % self.my_path
-
-if hasattr(XikiContext, 'registry'):
-	if 'default' in XikiContext.registry:
-		del XikiContext.registry['default']

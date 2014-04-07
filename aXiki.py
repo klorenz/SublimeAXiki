@@ -4,12 +4,11 @@ import sublime, sublime_plugin
 
 from imp import reload
 
-from .xiki import util, core, core, contexts, path
+from .xiki import util, core, core, path
 from . import xiki as xiki_package
 reload(util)
 reload(path)
 reload(core)
-reload(contexts)
 reload(xiki_package)
 
 # make xiki global
@@ -127,8 +126,6 @@ class SublimeXiki(BaseXiki):
 		BaseXiki.__init__(self)
 		self.plugin_root  = "Packages"
 		self.user_root    = "Packages/User/aXiki"
-		self.register_plugin('aXiki/xiki')
-		self.register_plugin('aXiki')
 
 	def is_packages(self, path):
 		return path == "Packages" or path.startswith('Packages/')
@@ -674,7 +671,10 @@ class XikiIde(sublime_plugin.WindowCommand):
 
 def plugin_loaded():
 	setattr(sys.modules['__main__'], 'xiki', xiki)
+	log.debug("make sure extensions are loaded")
 	# make sure extensions are up-to-date
+	xiki.register_plugin('aXiki/xiki')
+	xiki.register_plugin('aXiki')
 	xiki.extensions()
 
 def plugin_unloaded():

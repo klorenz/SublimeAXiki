@@ -1,0 +1,49 @@
+[
+    {
+        "args": {}, 
+        "command": "xiki", 
+        "keys": [
+            "ctrl+enter"
+        ], 
+        "context": [
+            {
+                "key": "setting.xiki", 
+                "operand": true, 
+                "operator": "equal"
+            }
+        ]
+    },
+    {
+        "args": {}, 
+        "command": "xiki_continue", 
+        "keys": [
+            "enter"
+        ], 
+        "context": [
+            {
+                "key": "setting.xiki", 
+                "operand": true, 
+                "operator": "equal"
+            },
+            {
+                "key": "setting.xiki_shell_mode", 
+                "operand": true, 
+                "operator": "equal"
+            }
+        ]
+    },
+    {
+        "args": {}, 
+        "command": "xiki_input", 
+        "keys": [
+            "ctrl+shift+enter"
+        ], 
+        "context": [
+            {
+                "key": "setting.xiki", 
+                "operand": true, 
+                "operator": "equal"
+            }
+        ]
+    }
+]
