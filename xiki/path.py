@@ -17,6 +17,8 @@ FREE_LINE         = re.compile(r'(?x) (?P<indent>\s*) (?P<node>[^\-–—+].*)')
 NODE_LINE_COMMENT = re.compile(r'(?x) \s+(?:--|—|–)\s+.*$')
 PATH_SEP          = re.compile(r'(?:/| -> | → )')
 
+BUTTON_RE         = re.compile(r'^(\s*)\[(\w+)\]\s*$')
+
 def match_node_line(s):
 	from .util import get_indent
 	#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
@@ -88,6 +90,18 @@ log = logging.getLogger('xiki.path')
 class XikiError(Exception):
 	pass
 
+class XikiInput:
+	def __init__(self, input=None, action=None):
+		self.input  = input
+		self.action = action
+
+	def __eq__(self, x):
+		return self.input == self.input and self.action == self.action
+
+	def __str__(self):
+		return str(self.input)
+
+
 class XikiPath:
 	def __init__(self, path):
 		self.paths = None
@@ -99,9 +113,11 @@ class XikiPath:
 		# self.rootctx = rootctx
 		log.debug("")
 
+		self.input  = None
+
 		if isinstance(path, str):
 			if "\n" in path:
-				self.paths = self.path_from_tree(path)
+				self.paths, self.input = self.path_from_tree(path)
 			else:
 				self.paths = self.parse(path)
 
@@ -223,6 +239,7 @@ class XikiPath:
 
 			foo/first/glork
 		'''
+		from .util import unindent
 
 		node_paths = [[]]
 		old_line = None
@@ -232,6 +249,8 @@ class XikiPath:
 		lines = lines.rstrip() + "\n"
 
 		log.debug("lines: %s" % lines)
+		collect_lines = False
+		input, action = None, None
 
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		for line in chain(reversed(lines.splitlines(1)), [None]):
@@ -253,6 +272,27 @@ class XikiPath:
 			line = process_line
 			# if 'hardcopy' in line:
 			# 	import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
+			if collect_lines:
+				if not line.strip():
+					input.append(indent+"\n")
+					continue
+
+				if line.startswith(indent):
+					input.append(line)
+					continue
+
+				input = unindent(''.join(input))
+				collect_lines = False
+				indent = None
+
+			if indent is None:
+				m = BUTTON_RE.match(line)
+				if m:
+					input = []
+					indent, action = m.groups()
+					collect_lines = True
+					continue
 
 			mob  = match_node_line(line)
 
@@ -310,7 +350,10 @@ class XikiPath:
 
 		node_paths.reverse()
 		log.debug("node_paths: %s", node_paths)
-		return node_paths
+		if input is not None:
+			input = XikiInput(input=input, action=action)
+
+		return node_paths, input
 
 	def __str__(self):
 		result = []
@@ -380,15 +423,21 @@ class XikiPath:
 
 		# single context for this path
 		for xiki_context in context.contexts():
-			ctx = xiki_context(ctx=context)
-			log.debug("try %s for %s", ctx, self)
+			try:
+				ctx = xiki_context(ctx=context)
+				log.debug("try %s for %s", ctx, self)
 
-			if ctx.does(self):
-				log.info("%s does %s", ctx, self)
-				return ctx.get_context()
+				if ctx.does(self):
+					log.info("%s does %s", ctx, self)
+					return ctx.get_context()
+			except:
+				log.error("error querying context %s for doing %s", ctx, 
+					self, exc_info=1)
 
 	def open(self, context, input=None, cont=False):
 		context = self.context(context)
+		if input is None:
+			input = self.input
 		log.debug("open: %s <- %s", context, self)
 		return context.open(input=input, cont=cont)
 

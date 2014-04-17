@@ -40,11 +40,14 @@ def is_text_file(filename, bytes=None):
 		s = f.read(512)
 		f.close()
 	else:
-		bytes = s
+		s = bytes
 
 	if not s:
 		# Empty files are considered text
 		return True
+
+	if isinstance(s, str):
+		s = s.encode('utf-8')
 
 	if b"\0" in s:
 		# Files with null bytes are likely binary
@@ -124,6 +127,9 @@ def cmd_string(args, quote='"'):
 	return ' '.join(r)
 
 def indent(s, indent="", hang=False):
+	if isinstance(indent, int):
+		indent = indent*" "
+
 	if not isinstance(s, str):
 		if not isinstance(s, list):
 			s = [y for y in s]
@@ -156,6 +162,8 @@ def find_lines(context, text, node_path):
 	was_empty = False
 
 	#import spdb ; spdb.start()
+	insert_xiki_path = None
+	insert_input = None
 
 	path_i = 0
 	i = -1
@@ -166,6 +174,29 @@ def find_lines(context, text, node_path):
 		line = lines[i]
 
 		log.debug("line: %s" % line.rstrip())
+
+		if insert_input is not None:
+			if not line.strip():
+				insert_input.append("\n")
+				continue
+
+			else:
+				ind = get_indent(line)
+
+				if ind.startswith(indentation[-1]):
+					insert_input.append(line[len(indentation[-1]):])
+					continue
+				else:
+					indentation.pop()
+
+					insert = XikiPath(insert_xiki_path).open(context, input=insert_input)
+					if collecting:
+						result.append(indent_lines(insert, ind))
+					else:
+						lines[i+1:i+2] = indent_lines(insert, indentation[-1]).splitlines(1)
+
+					insert_input     = None
+					insert_xiki_path = None
 
 		if collecting:
 			# line not empty
@@ -179,9 +210,16 @@ def find_lines(context, text, node_path):
 				if len(ind) == len(indentation[-1]):
 					line = line[len(ind):]
 
-					if line.startswith('<< '):  # insert
-						insert = XikiPath(line[2:].strip()).open(context)
-						result.append(indent_lines(insert, ind))
+					if line.startswith('<<'):  # insert
+						line = line.rstrip()
+						if line.endswith('<<'):
+							line = line[:-2].rstrip()
+							insert_xiki_path = line
+							need_indent = True
+							continue
+						else:
+							insert = XikiPath(line[2:].strip()).open(context)
+							result.append(indent_lines(insert, ind))
 					else:
 						if line.startswith('- '):
 							line = '+'+line[1:]
@@ -229,6 +267,15 @@ def find_lines(context, text, node_path):
 			if len(indent) > len(indentation[-1]):
 				indentation.append(indent)
 
+				if insert_xiki_path:
+					insert_input = []
+					if was_empty:
+						insert_input.append("\n")
+					insert_input.append(line+"\n")
+					need_indent = False
+					last_same_line = line
+					continue
+
 				if path_i >= len(path):
 					collecting = True
 					if line[0] == '-':
@@ -252,8 +299,13 @@ def find_lines(context, text, node_path):
 				return ""
 
 		if line.startswith('<<'):
-			insert = XikiPath(line[2:].strip()).expanded(context)
-			lines[i:i+1] = indent_lines(insert, indent).splitlines(1)
+			if line.endswith('<<'):
+				line = line[:-2].rstrip()
+				insert_xiki_path = line
+				need_indent = True
+			else:
+				insert = XikiPath(line[2:].strip()).open(context)
+				lines[i+1:i+2] = indent_lines(insert, indent).splitlines(1)
 			continue
 
 		if line.startswith('+'):
@@ -291,3 +343,14 @@ def find_lines(context, text, node_path):
 	return ''.join(result).rstrip()+"\n"
 
 
+SLUGIPY_RE = re.compile(r'[^\w]+')
+def slugipy(x):
+	"""pythonic slugify, such that there are only \w chars in name, starting
+	with a alphabetic char, a sequence of non-\w chars is replaced by "_",
+	so "foo bar" and "foo-bar" will both be translated to "foo_bar"
+	"""
+
+	return SLUGIPY_RE.sub("_", x)
+
+def slugify(x):
+	return SLUGIPY_RE.sub("-", x)

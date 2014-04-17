@@ -9,16 +9,22 @@ if __name__ == '__main__':
 
 from unittest import TestCase
 
-from ..path import XikiPath
+from ..path import XikiPath, XikiInput
 from ..util import unindent
 
 class TestXikiPath(TestCase):
 	pass
 
-
-
 def gen_test_xiki_path(p, e):
-	return lambda s: s.assertEquals( [x for x in XikiPath(p)], e)
+	def _test(self):
+		xiki_path = XikiPath(p)
+		if isinstance(e, dict):
+			self.assertEquals( [x for x in xiki_path], e['path'])
+			self.assertEquals( xiki_path.input, e['input'])
+		else:
+			self.assertEquals( [x for x in xiki_path], e)
+
+	return _test
 
 for n,p,e in [
 	(1, "foo1/bar"     , [[('foo1/', 0), ('bar', 0)]]),
@@ -92,6 +98,21 @@ for n,p,e in [
 	'''),
 	[[('$ pip --help', 0)]]
 	),
+	(14, unindent('''
+		- Contact
+		  - Add
+		    ===
+
+		    Name : Mickey Mouse
+		    Email: mickey@mouse.com
+
+		    [SUBMIT]
+	'''),
+	{'path': [[('Contact', 0), ('Add', 0)]],
+	 'input': XikiInput(action = 'SUBMIT', input  = "===\n\nName : Mickey Mouse\nEmail: mickey@mouse.com\n\n")
+	}
+	),
+
 	]:
 
 	setattr(TestXikiPath, 'test_xiki_path_%s' % n, gen_test_xiki_path(p, e))

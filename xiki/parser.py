@@ -117,3 +117,44 @@ def parse(input, data=None, lineno=1, filename=None):
 
 	# else we keep this string
 	return s
+
+def assemble(input, data=None):
+	output = ""
+	if isinstance(data, list):
+		for d in data:
+			output += '- '+indent(assemble(d), 2, True)
+	elif isinstance(data, dict):
+		# align keys
+		out_data = []
+		max_len  = 0
+		MAX_LEN  = 25
+		for k,v in sorted(data.items()):
+			v = assemble(v)
+			k_len = len(k)
+			if k_len < MAX_LEN and k_len > max_len:
+				max_len = k_len
+			out_data.append((k_len, k,v))
+
+		for k_len, k,v in out_data:
+			if k_len < MAX_LEN:
+				output += ("%s:" % k).ljust(k_len)
+			else:
+				output += "%s:"
+
+			if k_len >= MAX_LEN or "\n" in v:
+				output += "\n"+indent(v, 4)
+			else:
+				output += v+"\n"
+
+	elif isinstance(data, str):
+		if data:
+			if data[0].isspace():
+				return json.dumps(data)
+			elif "\n" in data:
+				if not data.endswith("\n"):
+					return json.dumps(data)
+			return data
+	else:
+		return json.dumps(data)
+
+	return output

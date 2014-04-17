@@ -1,0 +1,5 @@
+[
+	{ "caption": "aXiki: Run Unit Tests", 
+	  "command": "run_plugin_unittest", 
+	  "args": {"module": "aXiki.tests"} }
+]

@@ -17,6 +17,8 @@ This context is triggered, if a path is empty.
 			return not ''.join(xiki_path).strip()
 
 		def menu(self):
+			from xiki.util import unindent
+
 			result = []
 			for ctx in self.contexts():
 				c = ctx(self)

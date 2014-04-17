@@ -3,6 +3,8 @@ Menu
 
 Handle Menus.  Menus are actually simple extensions to aXiki.
 
+You have multiple opportunities to add active content to a menu.
+
 ::
 
 	class menu(XikiContext):
@@ -54,40 +56,94 @@ Handle Menus.  Menus are actually simple extensions to aXiki.
 
 			return True
 
-		def _run_menu(self, input, cont):
-			func = getattr(self.menu, 'menu')
+		def _run_menu(self, input, cont, xiki_path=None):
+			reserved = 0
 
-			if func.__class__.__name__ != 'function':
-				func = func.__call__
+			menu_func = self.menu
+			from xiki.util import slugipy
 
-			if hasattr(func, 'func_code'):
-				code = func.func_code
+			while xiki_path:
+				func_name = xiki_path[0]
+				if hasattr(menu_func, func_name):
+					menu_func = getattr(menu_func, func_name)
+					xiki_path = xiki_path[1:]
+				else:
+					func_name = slugipy(func_name)
+					if hasattr(menu_func, func_name):
+						menu_func = getattr(menu_func, func_name)
+						xiki_path = xiki_path[1:]
+					else:
+						break
+
+			if hasattr(menu_func, 'menu'):
+				menu_func = menu_func.menu
+
+			while xiki_path:
+				func_name = xiki_path[0]
+
+				if hasattr(menu_func, func_name):
+					menu_func = getattr(menu_func, func_name)
+					xiki_path = xiki_path[1:]
+				else:
+					func_name = slugipy(func_name)
+					if hasattr(menu_func, func_name):
+						menu_func = getattr(menu_func, func_name)
+						xiki_path = xiki_path[1:]
+					else:
+						break
+
+			if menu_func.__class__.__name__ != 'function':
+				menu_func = menu_func.__call__
+
+			if hasattr(menu_func, 'func_code'):
+				code = menu_func.func_code
 			else:
-				code = func.__code__
+				code = menu_func.__code__
 
-			if code.co_argcount == 0:
-				output = func()
-			elif code.co_argcount == 1:
-				output = func(self)
-			elif code.co_argcount == 2:
-				output = func(self, input)
-			else:
-				raise NotImplementedError("too many arguments")
+			kwargs = {}
 
-			return output
+			argcount = code.co_argcount
+			argnames = code.co_varnames[:argcount]
+
+			if 'context' in argnames:
+				argcount -= 1
+				kwargs['context'] = self
+
+			if 'input' in argnames:
+				argcount -= 1
+				kwargs['input'] = input
+
+			gets_slurpy_args   = code.co_flags & 0x04
+			gets_slurpy_kwargs = code.co_flags & 0x08
+
+			args = []
+			if gets_slurpy_args:
+				args = xiki_path
+			elif argcount:
+				if argcount == len(xiki_path):
+					args = [ x for x in xiki_path ]
+
+				args = xiki_path[:argcount]
+
+			output = menu_func(*args, **kwargs)
+
+			return output, xiki_path[argcount:]
 
 		def open(self, input=None, cont=None):
 			log.debug("menu is %s", self.menu)
 			if self.xiki_path and input:
+
 				# create new menu
 				pass
 
-
 			if hasattr(self.menu, 'menu'):
-				output = self._run_menu(input, cont)
+				output, xiki_path = self._run_menu(input, cont, self.xiki_path)
 
 				if not isinstance(output, Snippet):
-					return find_lines(self.context, output, self.xiki_path)
+					if not isinstance(output, str):
+						output = ''.join([x for x in output])
+					from xiki.util import find_lines
+					return find_lines(self.context, output, xiki_path)
 				else:
 					return output
 
@@ -104,3 +160,4 @@ Handle Menus.  Menus are actually simple extensions to aXiki.
 				return self.menu
 
 			return ""
+

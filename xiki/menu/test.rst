@@ -18,6 +18,15 @@ And on expansion, the command will be executed
 
 << test/second
 
+<< $ echo <<
+	This is input
+	for the echo
+	command.
+
+	this also
+
+But this is not.
+
 keys/
   - | keys    : ctrl+enter
     | command : xiki

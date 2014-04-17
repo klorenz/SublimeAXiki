@@ -192,7 +192,7 @@ Run following commands in a terminal::
 	
 		# 			yield '+ %s\n' % line
 	
-		def shell_execute(self, command, **kargs):
+		def execute_shell(self, command, **kargs):
 	
 			working_dir = kargs.get('cwd')
 	

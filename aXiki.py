@@ -4,9 +4,10 @@ import sublime, sublime_plugin
 
 from imp import reload
 
-from .xiki import util, core, core, path
+from .xiki import util, core, core, path, interface
 from . import xiki as xiki_package
 reload(util)
+reload(interface)
 reload(path)
 reload(core)
 reload(xiki_package)
@@ -30,7 +31,9 @@ backspace_re = re.compile('.\b')
 
 from .xiki.core import BaseXiki, ProxyXiki, XikiPath, INDENT, Snippet
 from .xiki.util import INDENT_RE, unindent
+from .xiki.path import XikiInput, BUTTON_RE
 from .edit import xiki_apply_edit, Edit
+
 
 def replace_line(view, edit, point, text):
 	text = text.rstrip()
@@ -126,6 +129,8 @@ class SublimeXiki(BaseXiki):
 		BaseXiki.__init__(self)
 		self.plugin_root  = "Packages"
 		self.user_root    = "Packages/User/aXiki"
+		self.lock = threading.Lock()
+		self.regions_processing = []
 
 	def is_packages(self, path):
 		return path == "Packages" or path.startswith('Packages/')
@@ -142,6 +147,95 @@ class SublimeXiki(BaseXiki):
 					yield r
 		else:
 			BaseXiki.walk(self, path)
+
+	# def _setting_name(self, name, namespace):
+	# 	var_name = 'xiki.'
+	# 	if namespace: 
+	# 		var_name += namespace + '.'
+	# 	var_name += name
+	# 	return var_name
+
+	# def _get_settings(self):
+	# 	w = sublime.active_window()
+	# 	if not w:
+	# 		settings = sublime.load_settings('Preferences.sublime-settings')
+	# 	else:
+	# 		v = w.active_view()
+	# 		if not v:
+	# 			settings = sublime.load_settings('Preferences.sublime-settings')
+	# 		else:
+	# 			settings = v.settings()
+
+	# 	return settings
+
+	# def get_setting(self, name, default=None, namespace=None, layer=None, obfuscated=False):
+	# 	var_name = self._setting_name(name, namespace)
+
+	# 	if layer:
+	# 		raise NotImplementedError
+
+	# 	settings = self._get_settings()
+
+	# 	value = settings.get(var_name)
+
+	# 	if value is None:
+	# 		return default
+
+	# 	if obfuscated:
+	# 		import base64
+	# 		value = base64.b64decode(value)
+	# 		value = bytes([ x ^ 173 for x in value ])
+	# 		return value.decode('utf-8')
+
+	# def set_setting(self, name, value, namespace=None, layer=None, obfuscate=False):
+	# 	var_name = self._setting_name(name, namespace)
+
+	# 	settings = sublime.load_settings('Preferences.sublime-settings')
+
+	# 	if obfuscate:
+	# 		value = value.encode('utf-8')
+	# 		value = bytes([ x ^ 173 for x in value ])
+	# 		import base64
+	# 		value = '{obfuscated}'+base64.b64encode(value)
+
+	# 	# we have to maintain a list of all current settings
+	# 	# in this namespace
+	# 	settings_ns_name = "xiki.%s" % namespace
+	# 	settings_ns = set(settings.get(settings_ns_name, []))
+	# 	settings_ns.add(name)
+	# 	settings.set(settings_ns_name, list(settings_ns))
+
+	# 	settings.set(var_name, value)
+	# 	sublime.save_settings('Preferences.sublime-settings')
+
+	# def settings(self, namespace=None, layer=None):
+	# 	var_name = self._setting_name(name, namespace)
+
+	# 	settings = self._get_settings()
+	# 	settings_ns_name = "xiki.%s" % namespace
+	# 	settings_ns = set(settings.get(settings_ns_name, []))
+
+	# 	settings_dict = {}
+
+	# 	for n in settings_ns:
+	# 		var_name = self._setting_name(name, namespace)
+	# 		settings_dict[n] = settings.get(var_name)
+
+	# 	return settings_dict
+
+
+	def isdir(self, path):
+		if path.startswith('Packages/'):
+			try:
+				r = sublime.find_resources(path+"/*")
+				if len(r):
+					return True
+				else:
+					return False
+			except:
+				return False
+
+		return BaseXiki.isdir(self, path)
 
 	def getmtime(self, path):
 		if path.startswith('Packages/aXiki'):
@@ -166,9 +260,15 @@ class SublimeXiki(BaseXiki):
 			return False
 		return BaseXiki.path_exists(self, path)
 
-	def read_file(self, path):
+	def read_file(self, path, count=None):
 		log.debug("reading %s", path)
 		if self.is_packages(path):
+			if count:
+				try:
+					return sublime.load_resource(path)[:count]
+				except:
+					return sublime.load_binary_resource(path)[:count]
+
 			return sublime.load_resource(path)
 		return BaseXiki.read_file(self, path)
 
@@ -176,36 +276,125 @@ class SublimeXiki(BaseXiki):
 		if path.startswith('Packages/'):
 			path = '${packages}/'+path[9:]
 
-		BaseXiki.open_file(path, opener=opener, text_opener=text_opener, 
+		BaseXiki.open_file(self, path, opener=opener, text_opener=text_opener, 
 			bin_opener=bin_opener)
 
-	def __call__(self, view, action="default", cont=False, handle_input=False):
+	def get_tree(self, view, line_region):
+		# get tree for current node
+		line = view.substr(line_region)
+		lr = line_region
+		indent = get_indent(view, lr.begin())
+		current_indent = indent
+
+		input = None
+		next_char   = view.full_line(line_region).end()+1
+		next_indent = get_indent(view, next_char)
+		if next_indent.startswith(indent) and len(next_indent) > len(indent):
+			input = view.indented_region(next_char)
+
+		if line.strip():
+			while lr.begin()-1 > 0 and indent:
+				lr = view.line(lr.begin()-1)
+				_indent = get_indent(view, lr)
+				_line   = view.substr(lr).strip()
+				if not _line:
+					continue
+
+				if len(_indent) < len(current_indent):
+					if _line.endswith('<<'): 
+						# this is the real start => should be line_region
+						#   indented is 
+						line_region = lr
+
+						r = view.indented_region(view.full_line(lr).end()+1)
+						input = unindent(view.substr(r))
+
+					current_indent = _indent
+
+				if len(_indent) == 0:
+					break
+
+		path_region = sublime.Region(lr.begin(), line_region.end())
+		tree        = view.substr(path_region)
+
+		return tree, line_region, input
+
+
+	def __call__(self, view, action="default", cont=False, handle_input=False, data=None):
 		'''Interface to Sublime Text.
+
+		Here the protocol:
+
+		You can request aXiki
+
+		- to open current line
+
+		- to open current line with input of indented lines.
+
+		  If there is a line part of tree path, which ends with "<<",
+		  this line will be the first line and gets the input.
+
+		- to complete something
+
+		- to handle a press of enter.  If line starts with a prompt of current
+		  context, then it will be handled, else a normal "\\n" will be 
+		  inserted.
+
 		'''
 
 		if not is_xiki_buffer(view): return
 
+		#import spdb ; spdb.start()
+
+		if action == 'complete':
+			sel = view.sel()[0]
+			line_region = view.full_line(sel.end())
+			
+			tree, line_region, input = self.get_tree(view, line_region)
+
+			xiki = SublimeRequestXiki(self, view, line_region, tree, cont=cont, sel=sel)
+			return xiki.complete(data)
+
+		log.debug("start new xiki request")
 		for sel in list(view.sel()):
+			log.debug("sel: %s", sel)
 			# get line region
 
 			line_region = view.full_line(sel.end())
 			line        = view.substr(line_region).rstrip()
 
-			# get tree for current node
-			lr = line_region
-			indent = get_indent(view, lr.begin())
-			if line.strip():
-				while lr.begin()-1 > 0 and indent:
-					lr = view.line(lr.begin()-1)
-					_indent = get_indent(view, lr)
-					_line   = view.substr(lr).strip()
-					if not _line:
-						continue
-					if len(_indent) == 0:
+			try:
+				self.lock.acquire()
+				already_processing = False
+				for pr in self.regions_processing:
+					log.debug("pr %s", pr)
+					if line_region.intersects(pr):
+						log.debug("already processing %s", pr)
+						already_processing = True
 						break
 
-			path_region = sublime.Region(lr.begin(), line_region.end())
-			tree        = view.substr(path_region)
+				if already_processing:
+					continue
+
+				log.debug("not yet processing: %s", line_region)
+				self.regions_processing.append(line_region)
+			finally:
+				self.lock.release()
+
+			input = None
+			m = BUTTON_RE.match(line)
+			if m:
+				action = m.group(2)
+				input_region = view.indented_region(line_region.begin())
+				input_region = sublime.Region(input_region.begion(), line_region.end())
+				input = XikiInput(
+					input  = unindent(view.substr(input_region)),
+					action = action,
+					)
+				line_region = view.full_line(input_region.begin()-1)
+				line        = view.substr(line_region).rstrip()
+
+			tree, line_region, input = self.get_tree(view, line_region)
 
 			# find input
 			next_char = sublime.Region(line_region.end(), line_region.end()+1)
@@ -217,10 +406,12 @@ class SublimeXiki(BaseXiki):
 			xiki = SublimeRequestXiki(self, view, line_region, tree, cont=cont, sel=sel)
 
 			if next_indent.startswith(indent) and len(next_indent) > len(indent):
-				r = view.indented_region(next_char.begin())
+				if not input:
+					r = view.indented_region(next_char.begin())
+					input = unindent(view.substr(r))
 
 				if handle_input:
-					xiki.open(input=unindent(view.substr(r)))
+					xiki.open(input=input)
 				else:
 					xiki.close()
 
@@ -268,6 +459,52 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 
 		return None
 
+	ENCODED_POSITION_RE = re.compile(r":\d+$")
+	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None):
+
+		def text_opener(filename):
+			if self.window.num_groups() > 1:
+				flags = sublime.TRANSIENT
+			else:
+				flags = 0
+
+			# if self.ENCODED_POSITION_RE.search(filename):
+			# 	view = self.window.open_file(filename, flags | sublime.ENCODED_POSITION)
+			# else:
+			# 	view = self.window.open_file(filename, flags)
+
+			if self.window.num_groups() > 1:
+				group, index = self.window.get_view_index(self.view)
+				log.debug("this group: %s", group)
+				_max = (0, group, index)
+				for i in range(self.window.num_groups()):
+					if i == group: continue
+					_v = self.window.active_view_in_group(i)
+					g, idx = self.window.get_view_index(_v)
+					width = _v.viewport_extent()[0]
+					log.debug("group: %s, width: %s, max: %s", i, width, _max)
+					if width > _max[0]:
+						_max = (width, i, idx)
+
+				log.debug("_max: %s", _max)
+
+				#log.debug("set_view_index, (%s, %s, %s)", view.id(), _max[1], _max[2])
+
+				self.window.focus_group(_max[1])
+
+
+			if self.ENCODED_POSITION_RE.search(filename):
+				view = self.window.open_file(filename, flags | sublime.ENCODED_POSITION)
+			else:
+				view = self.window.open_file(filename, flags)
+
+			# do this for preview mode
+			#self.window.focus_group(group)
+
+
+		SublimeXiki.open_file(self, filename, opener=opener, 
+			text_opener=text_opener, bin_opener=bin_opener)
+
 	def open(self, input=None, cont=False):
 		try:
 			context = XikiPath(self.tree).context(self)
@@ -300,6 +537,9 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 			)
 		t.start()
 
+	def complete(self, prefix):
+		return XikiPath(self.tree).complete(prefix)
+
 
 MULTISLASHES_RE = re.compile(r'//+')
 
@@ -325,6 +565,64 @@ class XikiHandlerThread(threading.Thread):
 		self.bullet  = bullet
 
 		self.indent = get_indent(view, region)
+
+		# this must be done in xiki command's thread
+		self.normal_enter = self._handle_normal_enter()
+
+		self.xiki.lock.acquire()
+		xiki_running = self.view.settings().get('xiki_running', 0)
+		self.view.settings().set('xiki_running', xiki_running+1)
+		self.xiki.lock.release()
+
+
+	def _handle_normal_enter(self):
+		if not self.xiki.cont: return
+
+		log.debug("Normal Enter")
+		normal_enter = False
+
+		if not self.context:
+			normal_enter = True
+		elif not self.context.prompt():
+			normal_enter = True
+		elif self.context:
+			prompt = self.context.prompt().lstrip()
+			log.debug("prompt: %s", repr(prompt))
+			line = self.view.substr(self.view.line(self.xiki.sel))
+			log.debug("line: %s", repr(line))
+			if not line.lstrip().startswith(prompt):
+				normal_enter = True
+
+		log.debug("Normal Enter: %s", normal_enter)
+		if normal_enter:
+			b = self.xiki.sel.begin()
+			e = self.xiki.sel.end()
+			log.debug("sel: %s, %s", b, e)
+
+			self.view.sel().subtract(self.xiki.sel)
+
+			# restore_sel = []
+			# for sel in list(self.view.sel()):
+			# 	if e in (sel.begin(), sel.end()):
+			# 		restore_sel.append(sel)
+			# 		view.sel().subtract(sel)
+
+			with Edit(self.view) as edit:
+				edit.replace(self.xiki.sel, "\n")
+
+				def _restore_sel():
+					if b != e:
+						log.debug("add: %s, %s", b, b+1)
+						self.view.sel().add(sublime.Region(b, b+1))
+					else:
+						log.debug("add: %s", b+1)
+						self.view.sel().add(sublime.Region(b+1))
+
+				edit.callback(_restore_sel)
+
+			return True
+
+		return False
 
 
 	def _append_output(self):
@@ -374,83 +672,66 @@ class XikiHandlerThread(threading.Thread):
 				edit.callback(restore_selections)
 
 	def run(self):
-		if self.xiki.cont:
-			log.debug("Normal Enter")
-			normal_enter = False
+		try:
+			if self.normal_enter: return
 
-			if not self.context:
-				normal_enter = True
-			elif not self.context.prompt():
-				normal_enter = True
-			elif self.context:
-				prompt = self.context.prompt().lstrip()
-				log.debug("prompt: %s", repr(prompt))
-				line = self.view.substr(self.view.line(self.xiki.sel))
-				log.debug("line: %s", repr(line))
-				if not line.lstrip().startswith(prompt):
-					normal_enter = True
-
-			log.debug("Normal Enter: %s", normal_enter)
-			if normal_enter:
-				b = self.xiki.sel.begin()
-				e = self.xiki.sel.end()
-				log.debug("sel: %s, %s", b, e)
-
-				self.view.sel().subtract(self.xiki.sel)
-
-				# restore_sel = []
-				# for sel in list(self.view.sel()):
-				# 	if e in (sel.begin(), sel.end()):
-				# 		restore_sel.append(sel)
-				# 		view.sel().subtract(sel)
-
+			line = self.view.substr(self.region)
+			log.debug("line: %s", repr(line))
+			log.debug("region1: %s", self.region)
+			if not line.endswith('\n'):
 				with Edit(self.view) as edit:
-					edit.replace(self.xiki.sel, "\n")
+					edit.insert(self.region.end(), "\n")
+				self.region = self.view.full_line(self.region)
+			log.debug("region2: %s", self.region)
 
-					def _restore_sel():
-						if b != e:
-							log.debug("add: %s, %s", b, b+1)
-							self.view.sel().add(sublime.Region(b, b+1))
-						else:
-							log.debug("add: %s", b+1)
-							self.view.sel().add(sublime.Region(b+1))
+			self.view.add_regions(self.region_name, [self.region], 'keyword', '', 
+				sublime.DRAW_OUTLINED)
 
-					edit.callback(_restore_sel)
+			try:
 
-				return
+				log.debug("handler: %s, args: %s, kwargs: %s", self.handler, self.args, self.kwargs)
+				output = self.handler(*self.args, **self.kwargs)
 
-		self.view.add_regions(self.region_name, [self.region], 'keyword', '', 
-			sublime.DRAW_OUTLINED)
-
-		try:
-
-			log.debug("handler: %s, args: %s, kwargs: %s", self.handler, self.args, self.kwargs)
-			output = self.handler(*self.args, **self.kwargs)
-
-		except Exception as e:
-			if self.view.settings().get('xiki_traceback'):
-				import traceback
-				output = traceback.format_exc()
-				output = ''.join(['! '+l for l in output.splitlines(1)])
-			else:
-				output = "! %s" % e
-
-		try:
-			self._print_output(output)
-		except Exception as e:
-			if self.view.settings().get('xiki_traceback'):
-				import traceback
-				output = traceback.format_exc()
-				output = ''.join(['! '+l for l in output.splitlines(1)])
-			else:
-				output = "! %s" % e
-
-			log.error("exception while printing", exc_info=1)
+			except Exception as e:
+				if self.view.settings().get('xiki_traceback'):
+					import traceback
+					output = traceback.format_exc()
+					output = ''.join(['! '+l for l in output.splitlines(1)])
+				else:
+					output = "! %s" % e
 
 			try:
 				self._print_output(output)
-			except:
-				log.error("exception while printing exception", exc_info=1)
+			except Exception as e:
+				if self.view.settings().get('xiki_traceback'):
+					import traceback
+					output = traceback.format_exc()
+					output = ''.join(['! '+l for l in output.splitlines(1)])
+				else:
+					output = "! %s" % e
+
+				log.error("exception while printing", exc_info=1)
+
+				try:
+					self._print_output(output)
+				except:
+					log.error("exception while printing exception", exc_info=1)
+		finally:
+			self.xiki.lock.acquire()
+
+			xiki_running = self.view.settings().get('xiki_running')
+			self.view.settings().set('xiki_running', xiki_running-1)
+
+			processing = []
+			for pr in self.xiki.regions_processing:
+				if not pr.intersects(self.region):
+					processing.append(pr)
+
+			self.xiki.regions_processing[:] = processing
+			log.debug("regions_processing: %s", processing)
+
+			self.xiki.lock.release()
+
 
 	def _insert_snippet(self, contents):
 		view   = self.view
@@ -463,6 +744,7 @@ class XikiHandlerThread(threading.Thread):
 		view.run_command('insert_snippet', {'contents': contents})
 
 	def _print_output(self, output):
+
 		line = self.view.substr(self.region)
 		line_to_replace = self.xiki.change_bullet(line, self.bullet)
 
@@ -488,6 +770,7 @@ class XikiHandlerThread(threading.Thread):
 			r = view.indented_region(next_char.begin())
 			with Edit(view) as edit:
 				edit.erase(r)
+
 
 		if isinstance(output, Snippet):
 			self._insert_snippet(str(output))
@@ -549,6 +832,12 @@ xiki = SublimeXiki()
 class XikiListener(sublime_plugin.EventListener):
 
 	def on_query_completions(self, view, prefix, locations):
+		if not is_xiki_buffer(view):
+			return []
+
+		sys.stderr.write("prefix: %s, locations: %s\n" % (prefix, locations))
+
+		return xiki(view, action='complete', data=prefix)
 
 		return []
 

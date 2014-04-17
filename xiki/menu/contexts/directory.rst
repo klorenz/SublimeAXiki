@@ -33,7 +33,6 @@ You can find out your current Project directories:
 
 		def does(self, node_path):
 			# not yet clear if path-part has to end with "/"
-			#import spdb ; spdb.start()
 			#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 
 			p = node_path
@@ -75,61 +74,19 @@ You can find out your current Project directories:
 			self.working_dir = os.path.join(self.working_dir, *p)
 
 			if not self.isdir(self.working_dir):
+				log.debug("(menu) file_path1: %s", self.file_path)
 				self.file_path   = self.working_dir
 				self.working_dir = os.path.dirname(self.working_dir)
 				self.file_name   = node_path[-1]
 
-			# log.debug("p: %s", p)
-			# log.debug("working_dir: %s", self.working_dir)
-
-			# #import rpdb2 ; rpdb2.start_embedded_debugger('foo')
-			# while p:
-			# 	working_dir = os.path.join(self.working_dir, p[0])
-			# 	log.debug("try working_dir: %s", working_dir)
-			# 	if not self.exists(working_dir):
-			# 		continue
-
-			# 		break
-			# 	else:
-			# 		self.working_dir = working_dir
-			# 		p = p[1:]
-
-			# log.debug("p: %s, node_path: %s", p, node_path)
-			# if p == node_path: return False
-
-			# if node_path.isdir() and p:
-			# 	self.mkdir(*p)
-			# 	self.working_dir = os.path.join(self.working_dir, *p)
-			# 	p = []
-
-			# if not node_path.isdir() and not p:
-			# 	self.file_path   = self.working_dir
-			# 	self.working_dir = os.path.dirname(self.working_dir)
-			# 	self.file_name   = node_path[-1]
-
-			# if not node_path.isdir() and p:
-			# 	self.file_path = os.path.join(self.working_dir, *p)
-			# 	self.file_name = p[-1]
-			# 	p = p[:-1]
-			# 	if p:
-			# 		self.mkdir(*p)
-			# 		self.working_dir = os.path.join(self.working_dir, *p)
-			# 		p = []
-
-			# from .path import XikiPath
-
-			# if p:
-			# 	self.xiki_path = XikiPath(p)
-
-			# self.node_path = node_path
-
-			# #if p:
-			# #	return False
+			log.debug("p: %s", p)
+			log.debug("working_dir: %s", self.working_dir)
 
 			return True
 
 		def menu(self):
 			log.debug("(menu) working_dir: %s", self.working_dir)
+			log.debug("(menu) file_path: %s", self.file_path)
 			#log.debug("(menu) node_path: %s", self.node_path.path)
 
 			if self.file_path:

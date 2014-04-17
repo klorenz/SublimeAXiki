@@ -1,37 +1,27 @@
-Adding Menus
+Manage Menus
 ============
 
-You have multiple opportunities to add menus.
+- user
+- project
+- system
+- don't panic
+  ~~~~~~~~~~~
 
-Open Menu File
---------------
+  Above you see two menus: user and project.  In user section you can browse user-specific menus and in project section project-specific.  In system you can browse system-specific menus.
 
-Add name of Menu file like this: 
-|
-| - docs/my-doc.py — This will open my-doc.py
-| - docs/Getting Started — This will find existing Getting Started rst file
-| - docs/
-|    - Getting Started
-|
-Go to a line and hit ctrl+enter to open file.
-
-Create Menu Inline
-------------------
-
-Add a new menu by either creating a submenu here like in this example:
-| - plants/fruits
-|   - apple
-|   - peach
-|   - plum
-Then go to `fruits` line and hit ``ctrl+shit+enter``.  This will create a file named plants/fruits.xiki with content
-| - apple
-| - peach
-| - plum
-
-If you have a project directory `project` and you want to create a menu there, you can do it with following code:
-| ~project/
-|    @menu
-|       - plants/fruits
-|         ...
+  If you add a subtree or path in one of sections above, and hit ctrl+enter on it, this menu will be created and opened.  If you hit ctrl+shift+enter and there is content under the node, this content will be initial text for the new menu.
 
 ::
+
+	def user(*path):
+		root = xiki.user_root
+		dir = os.path.join(root, xiki.extension_dir, *path)
+
+		for entry in xiki.listdir(dir):
+			yield entry
+
+	def project(*path):
+		raise NotImplemented
+
+	def system(*path):
+		return "hello world\n"

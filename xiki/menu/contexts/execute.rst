@@ -57,7 +57,7 @@ Finally here follows the code::
 
 			cmd = self.parse_command(s)
 			if not cmd:
-				return self.context.shell_execute(s, input=input)
+				return self.context.execute_shell(s, input=input)
 			else:
 				return self.context.execute(*cmd, input=input)
 	

@@ -14,6 +14,7 @@ def menu(ctx, input):
 		email     : $3
 		mobile    : $4
 		storage   : ${5:user}
+		${0:[SUBMIT]}
 		''')
 
 from xiki.util import unindent
@@ -28,6 +29,7 @@ def _test(testcase):
 		email     : $3
 		mobile    : $4
 		storage   : ${5:user}
+		${0:[SUBMIT]}
 		''')
 		)
 
