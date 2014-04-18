@@ -443,7 +443,27 @@ class BaseXiki(
 		self.extension_dir     = 'menu'
 		self._extensions       = XikiExtensions(self)
 		self.encoding          = 'utf-8'
+		self.lock              = threading.Lock()
 
+	def lock_acquire(self):
+		log.debug("acquire lock")
+		#import spdb ; spdb.start()
+		self.lock.acquire()
+
+	def lock_release(self):
+		log.debug("release lock")
+		self.lock.release()
+
+	def locked(self):
+		return self
+
+	def __enter__(self):
+		self.lock_acquire()
+		return self
+
+	def __exit__(self, type, value, traceback):
+		log.debug("exiting locked section: %s, %s, %s", type, value, traceback)
+		self.lock_release()
 
 	def exec_code(self, code, globals=None, locals=None):
 		return exec_code(code, globals, locals)

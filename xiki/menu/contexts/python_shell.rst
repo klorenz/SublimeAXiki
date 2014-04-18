@@ -15,6 +15,7 @@ Try this:
 		PS1     = ">>> "
 
 		def open(self, input=None, cont=None):
+			log.debug("input (py): %s", input)
 			s = self.mob.group(1)
 			_stderr = sys.stderr
 			_stdout = sys.stdout
@@ -47,6 +48,7 @@ Try this:
 
 				if not hasattr(main, 'help'):
 					setattr(main, 'help', pydoc.help)
+				main._ = input
 
 				if is_exec:
 					self.exec_code(code, sys.modules['__main__'].__dict__)

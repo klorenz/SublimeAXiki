@@ -26,6 +26,11 @@ import logging
 log = logging.getLogger('xiki.sublime-connector')
 log.setLevel(logging.DEBUG)
 
+root_logger = logging.getLogger()
+if not hasattr(root_logger, '_has_sublime_axiki_logger'):
+	root_logger.addHandler(logging.FileHandler("/tmp/sublime.log"))
+	root_logger._has_sublime_axiki_logger = True
+
 INDENTATION  = '  '
 backspace_re = re.compile('.\b')
 
@@ -47,7 +52,8 @@ def is_xiki_buffer(view):
 
 def get_indent(view, region):
 	v = view
-	return INDENT_RE.match(v.substr(v.line(region))).group(0)
+	line = v.substr(v.line(region))
+	return INDENT_RE.match(line).group(0)
 
 def get_main_group(window):
 	'''return widest view ... what if there are two wide views?'''
@@ -129,8 +135,15 @@ class SublimeXiki(BaseXiki):
 		BaseXiki.__init__(self)
 		self.plugin_root  = "Packages"
 		self.user_root    = "Packages/User/aXiki"
-		self.lock = threading.Lock()
 		self.regions_processing = []
+
+	def is_processing(self, view):
+		_id = view.id()
+		log.debug("regions_processing: %s, %s", _id, self.regions_processing)
+		for pr in self.regions_processing:
+			if pr[0] == _id:
+				return True
+		return False
 
 	def is_packages(self, path):
 		return path == "Packages" or path.startswith('Packages/')
@@ -292,6 +305,7 @@ class SublimeXiki(BaseXiki):
 		if next_indent.startswith(indent) and len(next_indent) > len(indent):
 			input = view.indented_region(next_char)
 
+		forced_input = False
 		if line.strip():
 			while lr.begin()-1 > 0 and indent:
 				lr = view.line(lr.begin()-1)
@@ -302,12 +316,16 @@ class SublimeXiki(BaseXiki):
 
 				if len(_indent) < len(current_indent):
 					if _line.endswith('<<'): 
+
 						# this is the real start => should be line_region
 						#   indented is 
-						line_region = lr
+						line_region = view.full_line(lr)
 
 						r = view.indented_region(view.full_line(lr).end()+1)
 						input = unindent(view.substr(r))
+						forced_input = True
+
+						log.debug("input: %s", input)
 
 					current_indent = _indent
 
@@ -316,6 +334,9 @@ class SublimeXiki(BaseXiki):
 
 		path_region = sublime.Region(lr.begin(), line_region.end())
 		tree        = view.substr(path_region)
+		if forced_input:
+			tree = tree.rstrip()
+			tree = tree[:-2].rstrip() + "\n"
 
 		return tree, line_region, input
 
@@ -363,30 +384,12 @@ class SublimeXiki(BaseXiki):
 			line_region = view.full_line(sel.end())
 			line        = view.substr(line_region).rstrip()
 
-			try:
-				self.lock.acquire()
-				already_processing = False
-				for pr in self.regions_processing:
-					log.debug("pr %s", pr)
-					if line_region.intersects(pr):
-						log.debug("already processing %s", pr)
-						already_processing = True
-						break
-
-				if already_processing:
-					continue
-
-				log.debug("not yet processing: %s", line_region)
-				self.regions_processing.append(line_region)
-			finally:
-				self.lock.release()
-
 			input = None
 			m = BUTTON_RE.match(line)
 			if m:
 				action = m.group(2)
 				input_region = view.indented_region(line_region.begin())
-				input_region = sublime.Region(input_region.begion(), line_region.end())
+				input_region = sublime.Region(input_region.begin(), line_region.end())
 				input = XikiInput(
 					input  = unindent(view.substr(input_region)),
 					action = action,
@@ -396,8 +399,29 @@ class SublimeXiki(BaseXiki):
 
 			tree, line_region, input = self.get_tree(view, line_region)
 
+			with self.locked() as x:
+				_id = view.id()
+				already_processing = False
+				for pr in x.regions_processing:
+					log.debug("pr %s", pr)
+					if _id != pr[0]: continue
+					if line_region.intersects(pr[1]):
+						already_processing = True
+						break
+
+				if already_processing:
+					log.debug("already processing %s", pr)
+					continue
+
+				log.debug("not yet processing: %s", line_region)
+				x.regions_processing.append((_id, line_region))
+
+			#import spdb ; spdb.start()
+
 			# find input
 			next_char = sublime.Region(line_region.end(), line_region.end()+1)
+
+			my_line = view.substr(line_region)
 
 			# collapse if needed
 			indent = get_indent(view, line_region)
@@ -405,7 +429,13 @@ class SublimeXiki(BaseXiki):
 
 			xiki = SublimeRequestXiki(self, view, line_region, tree, cont=cont, sel=sel)
 
-			if next_indent.startswith(indent) and len(next_indent) > len(indent):
+			if input:
+				if handle_input:
+					xiki.open(input=input)
+				else:
+					xiki.close()
+
+			elif next_indent.startswith(indent) and len(next_indent) > len(indent):
 				if not input:
 					r = view.indented_region(next_char.begin())
 					input = unindent(view.substr(r))
@@ -569,10 +599,12 @@ class XikiHandlerThread(threading.Thread):
 		# this must be done in xiki command's thread
 		self.normal_enter = self._handle_normal_enter()
 
-		self.xiki.lock.acquire()
-		xiki_running = self.view.settings().get('xiki_running', 0)
-		self.view.settings().set('xiki_running', xiki_running+1)
-		self.xiki.lock.release()
+		# log.debug("set xiki_running")
+		# with self.xiki.locked() as x:
+		# 	settings = x.view.settings()
+		# 	xiki_running = settings.get('xiki_running', 0)
+		# 	log.debug("xiki_running: %s", xiki_running)
+		# 	settings.set('xiki_running', xiki_running+1)
 
 
 	def _handle_normal_enter(self):
@@ -672,6 +704,7 @@ class XikiHandlerThread(threading.Thread):
 				edit.callback(restore_selections)
 
 	def run(self):
+		#import spdb ; spdb.start()
 		try:
 			if self.normal_enter: return
 
@@ -717,20 +750,36 @@ class XikiHandlerThread(threading.Thread):
 				except:
 					log.error("exception while printing exception", exc_info=1)
 		finally:
-			self.xiki.lock.acquire()
+			log.debug("finally clean up")
+			with self.xiki.locked() as x:
 
-			xiki_running = self.view.settings().get('xiki_running')
-			self.view.settings().set('xiki_running', xiki_running-1)
+				try:
+					# settings = self.view.settings()
 
-			processing = []
-			for pr in self.xiki.regions_processing:
-				if not pr.intersects(self.region):
-					processing.append(pr)
+					# xiki_running = settings.get('xiki_running')
+					# log.debug("xiki_running: %s", xiki_running)
+					# if xiki_running:
+					# 	log.debug("set xiki_running")
+					# 	settings.set('xiki_running', xiki_running-1)
+					# 	log.debug("done set xiki_running")
 
-			self.xiki.regions_processing[:] = processing
-			log.debug("regions_processing: %s", processing)
+					log.debug("step 1")
+					_id = self.view.id()
+					log.debug("_id: %s", _id)
+					processing = []
 
-			self.xiki.lock.release()
+					for pr in x.regions_processing:
+						log.debug("pr: %s", pr)
+						if _id != pr[0]:
+							processing.append(pr)
+						elif not pr[1].intersects(self.region):
+							processing.append(pr)
+					log.debug("step 2")
+
+					x.regions_processing[:] = processing
+					log.debug("regions_processing: %s", processing)
+				except:
+					log.debug("exception", exc_info=1)
 
 
 	def _insert_snippet(self, contents):

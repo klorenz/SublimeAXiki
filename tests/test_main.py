@@ -1,5 +1,5 @@
 from sublime_unittest import *
-import time
+import time, sys
 
 class aXikiTest(BufferTest):
 	def setUp(self):
@@ -9,9 +9,12 @@ class aXikiTest(BufferTest):
 
 	def cmd_ended(self):
 		#self.sublime_command
-		if time.time() - self.started > 10:
-			import spdb ; spdb.start()
-		return not self.view.settings().get('xiki_running')
+#		if time.time() - self.started > 10:
+#			import spdb ; spdb.start()
+		aXiki = sys.modules['aXiki.aXiki']
+		return not aXiki.xiki.is_processing(self.view)
+
+		#return not self.view.settings().get('xiki_running')
 
 	test_01_hello = (
 			'$ echo "hello world"│\n\n',
@@ -43,7 +46,8 @@ class aXikiTest(BufferTest):
 
 			'$ echo "hello world"\n'
 			'  hello world\n'
-			'$ │\n'
+			'$ \n'
+			'│\n'
 			'\n'
 			'more text'
 		)
@@ -61,4 +65,38 @@ class aXikiTest(BufferTest):
 			'│\n'
 			'\n'
 			'more text'
+		)
+
+	test_05_input_1 = (
+			'~/\n'
+			'	>>> prin│t(_ + "hello world")\n'
+			'	  hello world\n'
+			'\n'
+			'another line\n',
+
+			v('xiki_input', {}, 'cmd_ended'),
+
+			'~/\n'
+			'	>>> prin│t(_ + "hello world")\n'
+			'	  hello world\n'
+			'	  hello world\n'
+			'\n'
+			'another line\n',
+		)
+
+	test_05_input_2 = (
+			'~/\n'
+			'	>>> print(_ + "x") <<\n'
+			'	  hello │world\n'
+			'\n'
+			'another line\n',
+
+			v('xiki_input', {}, 'cmd_ended'),
+
+			'~/\n'
+			'	>>> print(_ + "x") <<\n'
+			'	  hello world\n'
+			'	  x\n'
+			'│\n'
+			'another line\n',
 		)

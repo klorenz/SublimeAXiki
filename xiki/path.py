@@ -90,17 +90,13 @@ log = logging.getLogger('xiki.path')
 class XikiError(Exception):
 	pass
 
-class XikiInput:
+class XikiInput(str):
 	def __init__(self, input=None, action=None):
-		self.input  = input
+		str.__init__(self, input)
 		self.action = action
 
 	def __eq__(self, x):
-		return self.input == self.input and self.action == self.action
-
-	def __str__(self):
-		return str(self.input)
-
+		return str.__eq__(self, x) and self.action == x.action
 
 class XikiPath:
 	def __init__(self, path):
@@ -433,6 +429,8 @@ class XikiPath:
 			except:
 				log.error("error querying context %s for doing %s", ctx, 
 					self, exc_info=1)
+
+	#def complete()
 
 	def open(self, context, input=None, cont=False):
 		context = self.context(context)
