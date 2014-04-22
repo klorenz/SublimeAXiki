@@ -100,3 +100,50 @@ class aXikiTest(BufferTest):
 			'│\n'
 			'another line\n',
 		)
+
+	test_06_form_buttons = (
+			unindent("""
+			inspect
+				- input
+				  test
+				  │[foo] [bar]
+			"""),
+
+			v('xiki', {}, 'cmd_ended'),
+
+			"inspect\n"
+			"	- input\n"
+			"	  | action: foo\n"
+			"	  | ------------------\n"
+			"	  | test\n"
+			"│"
+		)
+
+	test_07_form_buttons = (
+			"inspect/input\n"
+			"	  test\n"
+			"	  [foo] ┤[bar]├\n"
+			,
+			
+			v('xiki_continue', {}, 'cmd_ended'),
+
+			"inspect/input\n"
+			"  | action: bar\n"
+			"  | ------------------\n"
+			"  | test\n"
+			"│"
+		)
+
+	test_08_collapse_bug = (
+			"- foo\n"
+			"  - b│ar\n"
+			"    \n"
+			"  + glork\n",
+
+			v('xiki', {}, 'cmd_ended'),
+
+			"\n",
+			"- foo\n"
+			"  + bar\n"
+			"  + glork\n"
+		)

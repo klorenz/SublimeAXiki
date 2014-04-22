@@ -109,7 +109,7 @@ for n,p,e in [
 		    [SUBMIT]
 	'''),
 	{'path': [[('Contact', 0), ('Add', 0)]],
-	 'input': XikiInput(action = 'SUBMIT', input  = "===\n\nName : Mickey Mouse\nEmail: mickey@mouse.com\n\n")
+	 'input': XikiInput(action = 'SUBMIT', value = "===\n\nName : Mickey Mouse\nEmail: mickey@mouse.com\n\n")
 	}
 	),
 

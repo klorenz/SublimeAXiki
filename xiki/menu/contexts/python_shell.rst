@@ -56,7 +56,9 @@ Try this:
 					r = eval(s, sys.modules['__main__'].__dict__)
 			except:
 				import traceback
-				traceback.print_exc()
+				s = traceback.format_exc()
+				_output.write(s.decode('utf-8'))
+
 			finally:
 				sys.stderr = _stderr
 				sys.stdout = _stdout

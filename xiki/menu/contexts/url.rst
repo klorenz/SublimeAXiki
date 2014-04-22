@@ -12,7 +12,7 @@ Handles urls in any strings.  Like::
 ::
 
 	class URL(XikiContext):
-		PATTERN = re.compile(r'.*\b((?:https?|ftp)://[^\s]*)')
+		PATTERN = re.compile(r'(?=\w).*\b((?:https?|ftp)://[^\s]*)')
 
 		def open(self, input=None, cont=None):
 			url = self.mob.group(1)

@@ -17,7 +17,7 @@ FREE_LINE         = re.compile(r'(?x) (?P<indent>\s*) (?P<node>[^\-–—+].*)')
 NODE_LINE_COMMENT = re.compile(r'(?x) \s+(?:--|—|–)\s+.*$')
 PATH_SEP          = re.compile(r'(?:/| -> | → )')
 
-BUTTON_RE         = re.compile(r'^(\s*)\[(\w+)\]\s*$')
+BUTTON_RE         = re.compile(r'^(\s*)\[(\w+)\](?:\s+\[\w+\])*\s*$')
 
 def match_node_line(s):
 	from .util import get_indent
@@ -90,13 +90,18 @@ log = logging.getLogger('xiki.path')
 class XikiError(Exception):
 	pass
 
-class XikiInput(str):
-	def __init__(self, input=None, action=None):
-		str.__init__(self, input)
+
+# compare http://stackoverflow.com/questions/2673651/inheritance-from-str-or-int
+class XikiInput:
+	def __init__(self, value, action=None):
+		self.value = value
 		self.action = action
 
-	def __eq__(self, x):
-		return str.__eq__(self, x) and self.action == x.action
+	def __getattr__(self, name):
+		return getattr(self.value, name)
+
+	# def __eq__(self, x):
+	# 	return self.value == x.value and self.action == x.action
 
 class XikiPath:
 	def __init__(self, path):
@@ -119,7 +124,8 @@ class XikiPath:
 
 			log.debug("%s -> %s", repr(path), self.paths)
 		else:
-			self.path = path
+			self.path = [ isinstance(x, tuple) and x or (x,0) for x in path ]
+
 
 	def __iter__(self):
 		if self.paths:
@@ -128,7 +134,11 @@ class XikiPath:
 		else:
 			if self.path:
 				for p in self.path:
-					yield p[0]
+					# if '/' in p[0] and not "://" in p[0]:
+					# 	for x in p[0].split('/'):
+					# 		yield x
+					# else:
+						yield p[0]
 
 	def __len__(self):
 		if self.paths:
@@ -141,6 +151,14 @@ class XikiPath:
 		if self.paths:
 			return bool(self.paths)
 		return bool(self.path)
+
+	# def split_elements(self, sep="/"):
+	# 	new_path = []
+	# 	path = self.path
+	# 	for p in self.path:
+	# 		new_path += p.split(sep)
+	# 	self.path[:] = new_path
+	# 	return new_path
 
 	def insert(self, index, path):
 		if not isinstance(path, tuple):
@@ -347,7 +365,7 @@ class XikiPath:
 		node_paths.reverse()
 		log.debug("node_paths: %s", node_paths)
 		if input is not None:
-			input = XikiInput(input=input, action=action)
+			input = XikiInput(value=input, action=action)
 
 		return node_paths, input
 
@@ -415,10 +433,13 @@ class XikiPath:
 				context = XikiPath(p).context(context)
 			return context
 
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
 		#from .core import XikiContext
 
 		# single context for this path
 		for xiki_context in context.contexts():
+			ctx = None
 			try:
 				ctx = xiki_context(ctx=context)
 				log.debug("try %s for %s", ctx, self)
@@ -437,14 +458,23 @@ class XikiPath:
 		if input is None:
 			input = self.input
 		log.debug("open: %s <- %s", context, self)
+		if not isinstance(input, XikiInput):
+			input= XikiInput(input)
+
+		if input.action == 'bar':
+			import spdb ; spdb.start()
 		return context.open(input=input, cont=cont)
 
 	def expanded(self, context, input=None):
 		context = self.context(context)
+		if not isinstance(input, XikiInput):
+			input= XikiInput(input)
 		log.debug("open: %s <- %s", context, self)
 		return context.expanded(input=input, cont=cont)
 
 	def close(self, context, input=None):
 		context = self.context(context)
 		log.debug("close: %s <- %s", context, self)
+		if not isinstance(input, XikiInput):
+			input= XikiInput(input)
 		return context.close(input=input)

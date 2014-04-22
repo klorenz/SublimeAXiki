@@ -31,7 +31,9 @@ class MyXiki(ConsoleXiki):
 class TestXikiContext(TestCase):
 
 	def _test_xiki_path(self, path, expected):
-		x = XikiPath(path).open(MyXiki())
+		xiki = MyXiki()
+		xiki.extensions()
+		x = XikiPath(path).open(xiki)
 		if isinstance(x, str): x = [x]
 		self.assertEquals([y for y in x], expected)
 
@@ -48,17 +50,18 @@ class TestXikiContext(TestCase):
 			"{})\n" 
 			])
 
-	@skip
-	def test_ssh_root(self):
-		self._test_xiki_path("user@host.com:1234//foo/bar", [
-			"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F', '/foo/bar'), "
-			"{})\n" 
-			])
+	# @skip
+	# def test_ssh_root(self):
+	# 	self._test_xiki_path("user@host.com:1234//foo/bar", [
+	# 		"+ execute(('ssh', '-p', '1234', 'user@host.com', 'ls', '-F', '/foo/bar'), "
+	# 		"{})\n" 
+	# 		])
 
 
 	def test_execute(self):
+		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 		self._test_xiki_path("/foo/bar/$ ls -l",[
-		 	"execute(('ls', '-l'), {'cwd': '/foo/bar'})"
+		 	"execute(('ls', '-l'), {'input': None, 'cwd': '/foo/bar'})"
 			])
 
 	def test_root_menu(self):

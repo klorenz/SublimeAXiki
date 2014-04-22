@@ -21,25 +21,36 @@ You have multiple opportunities to add active content to a menu.
 
 		def does(self, xiki_path):
 			#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
+
+			#import spdb ; spdb.start()
 			if not xiki_path: return False
+
+			#xiki_path.split_elements()
 
 			menu_files = self.extensions()
 
 			menu = None
 			i = len(xiki_path)
 			log.debug("xiki_path: %s, %s", i, xiki_path)
+
+			path = "/".join(xiki_path).split("/")
+
 			while i > 0:
-				name = str(xiki_path[:i])
+			#	name = str(xiki_path[:i])
+				name = "/".join(path[:i])
 
 				log.debug("try: %s", name)
 
 				if name not in menu_files:
 					i -= 1
 					continue
-				self.menu_path = xiki_path[:i]
-				self.xiki_path = xiki_path[i:]
+
+				self.menu_path = XikiPath(path[:i])
+				self.xiki_path = XikiPath(path[i:])
 				menu = menu_files[name]
 				break
+
+			log.debug("name: %s", name)
 
 			self.menu = menu
 
@@ -116,9 +127,14 @@ You have multiple opportunities to add active content to a menu.
 			gets_slurpy_args   = code.co_flags & 0x04
 			gets_slurpy_kwargs = code.co_flags & 0x08
 
+			if gets_slurpy_kwargs:
+				kwargs['input']   = input
+				kwargs['context'] = self
+
 			args = []
 			if gets_slurpy_args:
-				args = xiki_path
+				args     = xiki_path
+				argcount = len(xiki_path)
 			elif argcount:
 				if argcount == len(xiki_path):
 					args = [ x for x in xiki_path ]
@@ -142,6 +158,10 @@ You have multiple opportunities to add active content to a menu.
 				if not isinstance(output, Snippet):
 					if not isinstance(output, str):
 						output = ''.join([x for x in output])
+
+					if not output:
+						return ''
+
 					from xiki.util import find_lines
 					return find_lines(self.context, output, xiki_path)
 				else:

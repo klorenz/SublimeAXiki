@@ -33,6 +33,7 @@ if not hasattr(root_logger, '_has_sublime_axiki_logger'):
 
 INDENTATION  = '  '
 backspace_re = re.compile('.\b')
+WHITESPACE = re.compile(r"[\x20\t\n\r\v]")
 
 from .xiki.core import BaseXiki, ProxyXiki, XikiPath, INDENT, Snippet
 from .xiki.util import INDENT_RE, unindent
@@ -260,7 +261,7 @@ class SublimeXiki(BaseXiki):
 		if path.startswith('Packages/'):
 			return started
 
-	def path_exists(self, path):
+	def exists(self, path):
 		if self.is_packages(path):
 			slashed_p = path
 			if not slashed_p.endswith('/'):
@@ -271,7 +272,30 @@ class SublimeXiki(BaseXiki):
 				if r.startswith(slashed_p): return True
 
 			return False
-		return BaseXiki.path_exists(self, path)
+		return BaseXiki.exists(self, path)
+
+	def listdir(self, path):
+		if self.is_packages(path):
+			_path = sublime.packages_path()
+			path = os.path.join(_path, path[9:])
+
+			result = set()
+			if os.path.exists(path):
+				for x in BaseXiki.listdir(self, path):
+					result.add(x)
+
+			slashed_p = path
+			if not slashed_p.endswith('/'):
+				slashed_p += "/"
+
+			for r in sublime.find_resources('*'):
+				if r.startswith(slashed_p):
+					result.add(r[len(slashed_p):].split('/')[0])
+
+			return list(result)
+
+		return BaseXiki.listdir(self, path)
+
 
 	def read_file(self, path, count=None):
 		log.debug("reading %s", path)
@@ -285,12 +309,19 @@ class SublimeXiki(BaseXiki):
 			return sublime.load_resource(path)
 		return BaseXiki.read_file(self, path)
 
-	def open_file(self, path, opener=None, text_opener=None, bin_opener=None):
+	def open_file(self, path, opener=None, text_opener=None, bin_opener=None, content=None):
 		if path.startswith('Packages/'):
-			path = '${packages}/'+path[9:]
+			_path = sublime.packages_path()
+			_path = os.path.join(_path, path[9:])
+			if os.path.exists(_path):
+				path = _path
+			else:
+				path = '${packages}/'+path[9:]
 
 		BaseXiki.open_file(self, path, opener=opener, text_opener=text_opener, 
 			bin_opener=bin_opener)
+
+		return []
 
 	def get_tree(self, view, line_region):
 		# get tree for current node
@@ -303,7 +334,7 @@ class SublimeXiki(BaseXiki):
 		next_char   = view.full_line(line_region).end()+1
 		next_indent = get_indent(view, next_char)
 		if next_indent.startswith(indent) and len(next_indent) > len(indent):
-			input = view.indented_region(next_char)
+			input = view.substr(view.indented_region(next_char))
 
 		forced_input = False
 		if line.strip():
@@ -387,17 +418,42 @@ class SublimeXiki(BaseXiki):
 			input = None
 			m = BUTTON_RE.match(line)
 			if m:
-				action = m.group(2)
+				action = None
+
+				#import spdb ; spdb.start()
+
+				# pressing a button implies input handling
+				handle_input = True
+
+				selreg = sublime.Region(sel.begin(), line_region.end())
+				selstr = view.substr(selreg)
+				# ar] [bar] " "
+				selstr = selstr.split()[0]
+				if not selstr: # ""
+					selreg = sublime.Region(line_region.begin(), sel.end())
+					selstr = view.substr(selreg).split()[-1]
+				elif selstr[0] != '[':
+					selreg = sublime.Region(line_region.begin(), sel.end())
+					selstr += view.substr(selreg).split()[-1]
+
+				assert not WHITESPACE.search(selstr), "multiple actions selected"
+
+				action = selstr[1:-1]
+
 				input_region = view.indented_region(line_region.begin())
-				input_region = sublime.Region(input_region.begin(), line_region.end())
+				input_region = sublime.Region(input_region.begin(), line_region.begin())
 				input = XikiInput(
-					input  = unindent(view.substr(input_region)),
+					value  = unindent(view.substr(input_region)),
 					action = action,
 					)
 				line_region = view.full_line(input_region.begin()-1)
 				line        = view.substr(line_region).rstrip()
-
-			tree, line_region, input = self.get_tree(view, line_region)
+				# in this case we do not want the prompt handling, but
+				# want to press the button
+				cont        = False
+				tree, line_region, _input = self.get_tree(view, line_region)
+			else:
+				tree, line_region, input = self.get_tree(view, line_region)
 
 			with self.locked() as x:
 				_id = view.id()
@@ -490,7 +546,7 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 		return None
 
 	ENCODED_POSITION_RE = re.compile(r":\d+$")
-	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None):
+	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None, content=None):
 
 		def text_opener(filename):
 			if self.window.num_groups() > 1:
@@ -528,12 +584,17 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 			else:
 				view = self.window.open_file(filename, flags)
 
+			if content is not None:
+				with Edit(view) as edit:
+					edit.insert(view.size(), content)
+
 			# do this for preview mode
 			#self.window.focus_group(group)
 
-
 		SublimeXiki.open_file(self, filename, opener=opener, 
 			text_opener=text_opener, bin_opener=bin_opener)
+
+		return []
 
 	def open(self, input=None, cont=False):
 		try:
@@ -734,6 +795,7 @@ class XikiHandlerThread(threading.Thread):
 					output = "! %s" % e
 
 			try:
+				#import spdb ; spdb.start()
 				self._print_output(output)
 			except Exception as e:
 				if self.view.settings().get('xiki_traceback'):
@@ -823,7 +885,7 @@ class XikiHandlerThread(threading.Thread):
 
 		if isinstance(output, Snippet):
 			self._insert_snippet(str(output))
-		else:
+		elif len(output):
 			self.buffer = buf = []
 			last        = time.time()
 
@@ -843,7 +905,7 @@ class XikiHandlerThread(threading.Thread):
 					last = time.time()
 					self._append_output()
 
-			if buf:
+			if len(buf):
 				log.debug("buf: %s", buf)
 				if not buf[-1].endswith("\n"):
 					buf.append("\n")
@@ -965,7 +1027,7 @@ class XikiContinue(XikiCommand):
 	def run(self, edit):
 		xiki(self.view, cont=True)
 
-class XikiInput(XikiCommand):
+class XikiInputCommand(XikiCommand):
 	def run(self, edit):
 		xiki(self.view, handle_input=True)
 

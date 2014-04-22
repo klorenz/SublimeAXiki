@@ -117,7 +117,10 @@ class XikiExtensions:
 	def get_title(self, name, docstring):
 
 		line = 1
-		title, doc = docstring.split("\n", 1)
+		if "\n" in docstring:
+			title, doc = docstring.split("\n", 1)
+		else:
+			title, doc = docstring, ""
 
 		if title.startswith('<<'):
 			if title.endswith('<<'):
@@ -129,7 +132,10 @@ class XikiExtensions:
 				
 			log.debug("docstring: %s", docstring)
 
-			title, doc = docstring.split("\n", 1)
+			if "\n" in docstring:
+				title, doc = docstring.split("\n", 1)
+			else:
+				title, doc = docstring, ""
 
 			if title.endswith(':'):
 				title = title[:-1]
@@ -145,7 +151,7 @@ class XikiExtensions:
 		# 	doc = doc.split("\n", 1)[1]
 		# 	line = 2
 
-		# i = 0
+		# i print= 0
 		# while doc[i].isspace():
 		# 	if doc[i] == "\n":
 		# 		line += 1
@@ -287,8 +293,6 @@ class XikiExtensions:
 			return title
 		except:
 			log.error("error loading %s", path_name, exc_info=1)
-
-
 
 
 	def add_files_from_path(self, root):
@@ -521,8 +525,11 @@ class BaseXiki(
 			if ctx.__module__.startswith('xiki.%s' % self.name):
 				yield ctx
 
-		yield menu
-		yield default
+		if menu:
+			yield menu
+
+		if default:
+			yield default
 
 	def parse_data(self, string):
 		from .parser import parse
@@ -622,11 +629,15 @@ class BaseXiki(
 		content = self.read_file(filename)
 
 
-	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None):
+	def open_file(self, filename, opener=None, text_opener=None, bin_opener=None, content=None):
 		'''open a file in current environment.  Usually you would here
 		hook in your editor'''
 
 		from .util import os_open, is_text_file
+
+		if not self.exists(filename):
+			if content:
+				return content.splitlines(1)
 
 		if is_text_file(filename, self.read_file(filename, 512)):
 
@@ -638,6 +649,8 @@ class BaseXiki(
 				r = opener(filename)
 				if r is not None:
 					return r
+
+				#filename += xiki.default_extension
 
 			def _reader():
 				with open(filename, 'r') as f:

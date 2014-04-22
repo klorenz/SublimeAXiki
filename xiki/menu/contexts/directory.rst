@@ -37,6 +37,9 @@ You can find out your current Project directories:
 
 			p = node_path
 		#	p = self.shell_expand('/'.join(p)).replace('\\', '/')
+			
+
+
 			p = self.shell_expand(''.join(p)).replace('\\', '/')
 			log.debug("p: %s", p)
 			p = p.split('/')

@@ -11,10 +11,15 @@ from ..path import XikiPath
 from ..core import XikiContext, MemXiki
 # from ..contexts import XikiMenuFiles
 
+from .. import core
+
 class MyXiki(MemXiki):
 
 	def __init__(self,*args, **kargs):
 		MemXiki.__init__(self,*args,**kargs)
+
+		
+
 #		self.menu_files = XikiMenuFiles(self)
 		#import rpdb2 ; rpdb2.start_embedded_debugger('foo')
 #		self.menu_files.update()
@@ -39,6 +44,9 @@ class MyXiki(MemXiki):
 
 class TestXikiMenu(TestCase):
 	xiki = MyXiki()
+
+# 	def test_01_menu(self):
+
 
 print(sys.modules.keys())
 
