@@ -31,16 +31,12 @@ def open(*path, **kwargs):
 	result = set()
 	sys.stderr.write("menu_path: %s\n" % menu_path)
 	for k,v in menu_files.items():
-		sys.stderr.write("k: %s\n" % k)
-		sys.stderr.write("v: %s\n" % v)
 		if k.startswith(slashed_p):
 			k += os.path.splitext(v.__file__)[1]
 			n = k[len(slashed_p):].split('/')[0]
-			sys.stderr.write("n: %s\n" % n)
 			result.add(n)
 
 	if not result:
-		sys.stderr.write("menu_path: %s\n" % menu_path)
 		assert os.path.splitext(menu_path)[1], "No extension provivded"
 		content = kwargs.get('input')
 		if not content:
