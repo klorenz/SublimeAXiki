@@ -67,11 +67,13 @@ You have multiple opportunities to add active content to a menu.
 
 			return True
 
-		def _run_menu(self, input, cont, xiki_path=None):
+		def _run_menu(self, input, cont, xiki_path=None, function='menu'):
 			reserved = 0
 
 			menu_func = self.menu
 			from xiki.util import slugipy
+			if xiki_path is None:
+				xiki_path = []
 
 			while xiki_path:
 				func_name = xiki_path[0]
@@ -86,8 +88,8 @@ You have multiple opportunities to add active content to a menu.
 					else:
 						break
 
-			if hasattr(menu_func, 'menu'):
-				menu_func = menu_func.menu
+			if hasattr(menu_func, function):
+				menu_func = getattr(menu_func, function)
 
 			while xiki_path:
 				func_name = xiki_path[0]
@@ -120,6 +122,10 @@ You have multiple opportunities to add active content to a menu.
 				argcount -= 1
 				kwargs['context'] = self
 
+			if 'ctx' in argnames:
+				argcount -= 1
+				kwargs['ctx'] = self
+
 			if 'input' in argnames:
 				argcount -= 1
 				kwargs['input'] = input
@@ -130,6 +136,7 @@ You have multiple opportunities to add active content to a menu.
 			if gets_slurpy_kwargs:
 				kwargs['input']   = input
 				kwargs['context'] = self
+				kwargs['ctx'] = self
 
 			args = []
 			if gets_slurpy_args:
@@ -141,6 +148,7 @@ You have multiple opportunities to add active content to a menu.
 
 				args = xiki_path[:argcount]
 
+			log.debug("run: %s(%s, %s)", menu_func.__name__, args, kwargs)
 			output = menu_func(*args, **kwargs)
 
 			return output, xiki_path[argcount:]
@@ -152,25 +160,34 @@ You have multiple opportunities to add active content to a menu.
 				# create new menu
 				pass
 
-			if hasattr(self.menu, 'menu'):
-				output, xiki_path = self._run_menu(input, cont, self.xiki_path)
+			for name in ('open', 'menu'):
+				if hasattr(self.menu, name):
+					output, xiki_path = self._run_menu(input, cont, self.xiki_path, function=name)
 
-				if not isinstance(output, Snippet):
-					if not isinstance(output, str):
-						output = ''.join([x for x in output])
+					if not isinstance(output, Snippet):
+						if not isinstance(output, str):
+							output = ''.join([x for x in output])
 
-					if not output:
-						return ''
+						if not output:
+							return ''
 
-					from xiki.util import find_lines
-					return find_lines(self.context, output, xiki_path)
-				else:
-					return output
+						from xiki.util import find_lines
+						return find_lines(self.context, output, xiki_path)
+					else:
+						return output
 
 			if isinstance(self.menu, str):
 				return self.menu
 
 			return ""
+
+		def close(self, input=None):
+			log.debug("close called")
+			if hasattr(self.menu, 'close'):
+				log.debug("has close: %s", self.xiki_path)
+
+				output, xiki_path = self._run_menu(input=input, cont=None, xiki_path=self.xiki_path, function='close')
+				return output
 
 		def expanded(self, s=None):
 			if hasattr(self.menu, 'menu'):

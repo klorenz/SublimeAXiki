@@ -23,8 +23,9 @@ import logging
 import re
 
 import logging
+log = logging.getLogger('xiki')
+log.setLevel(logging.ERROR)
 log = logging.getLogger('xiki.sublime-connector')
-log.setLevel(logging.DEBUG)
 
 root_logger = logging.getLogger()
 if not hasattr(root_logger, '_has_sublime_axiki_logger'):
@@ -39,7 +40,6 @@ from .xiki.core import BaseXiki, ProxyXiki, XikiPath, INDENT, Snippet
 from .xiki.util import INDENT_RE, unindent
 from .xiki.path import XikiInput, BUTTON_RE
 from .edit import xiki_apply_edit, Edit
-
 
 def replace_line(view, edit, point, text):
 	text = text.rstrip()
@@ -312,14 +312,18 @@ class SublimeXiki(BaseXiki):
 	def open_file(self, path, opener=None, text_opener=None, bin_opener=None, content=None):
 		if path.startswith('Packages/'):
 			_path = sublime.packages_path()
-			_path = os.path.join(_path, path[9:])
-			if os.path.exists(_path):
-				path = _path
+			path = path[9:]
+
+			dirname = path.split('/', 1)[0]
+			if os.path.exists(os.path.join(_path, dirname)):
+				path = os.path.join(_path, path)
 			else:
-				path = '${packages}/'+path[9:]
+				path = '${packages}/'+path
+
+		log.error("open_file: %s", path)
 
 		BaseXiki.open_file(self, path, opener=opener, text_opener=text_opener, 
-			bin_opener=bin_opener)
+			bin_opener=bin_opener, content=content)
 
 		return []
 
@@ -395,6 +399,14 @@ class SublimeXiki(BaseXiki):
 		'''
 
 		if not is_xiki_buffer(view): return
+
+		log_level = view.settings().get('xiki_log_level', 'ERROR')
+		xiki_log = logging.getLogger('xiki')
+		try:
+			xiki_log.setLevel(getattr(logging, log_level))
+		except:
+			xiki_log.setLevel(logging.ERROR)
+			xiki_log.error("unknown loglevel: %s, use one of 'DEBUG', 'INFO', 'WARNING', 'ERROR'", log_level)
 
 		#import spdb ; spdb.start()
 
@@ -578,6 +590,11 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 
 				self.window.focus_group(_max[1])
 
+			#if filename startswith ${packages} use runcommand
+
+			if filename.startswith('${packages}'):
+				self.window.run_command('open_file', {'file': filename})
+				return
 
 			if self.ENCODED_POSITION_RE.search(filename):
 				view = self.window.open_file(filename, flags | sublime.ENCODED_POSITION)
@@ -592,9 +609,31 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
 			#self.window.focus_group(group)
 
 		SublimeXiki.open_file(self, filename, opener=opener, 
-			text_opener=text_opener, bin_opener=bin_opener)
+			text_opener=text_opener, bin_opener=bin_opener, content=content)
 
 		return []
+
+	def close_file(self, filename):
+		log.debug("close_file: %s", filename)
+		_path = os.path.normpath(filename)
+		log.debug("try close: %s", _path)
+		view = self.window.find_open_file(_path)
+		if not view:
+			if filename.startswith('Packages/'):
+				_path = sublime.packages_path()
+				_path = os.path.join(_path, filename[9:])
+				_path = os.path.normpath(_path)
+				log.debug("try close: %s", _path)
+				view = self.window.find_open_file(_path)
+
+		if not view: return
+
+		log.debug("close_file: %s", filename)
+
+		self.window.focus_view(view)
+		self.window.run_command('close', {})
+		sublime.set_timeout(lambda: self.window.focus_view(self.view), 100)
+
 
 	def open(self, input=None, cont=False):
 		try:

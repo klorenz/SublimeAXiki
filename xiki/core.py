@@ -172,7 +172,7 @@ class XikiExtensions:
 			exec_code(code, m.__dict__)
 
 
-			if not hasattr(m,'menu'):
+			if not hasattr(m,'menu') and not hasattr(m, 'open'):
 
 				if hasattr(m, 'Menu'):
 					m.menu = m.Menu()
@@ -190,7 +190,7 @@ class XikiExtensions:
 							import types
 							result = []
 							for a in dir(mod):
-								if isinstance(a, types.ClassType):
+								if isinstance(a, type):
 									if issubclass(a, XikiContext):
 										result.append("+ %s\n" % a)
 									elif callable(a):
@@ -636,8 +636,16 @@ class BaseXiki(
 		from .util import os_open, is_text_file
 
 		if not self.exists(filename):
+			if text_opener:
+				return text_opener(filename)
+
+			if opener:
+				return opener(filename)
+
 			if content:
 				return content.splitlines(1)
+
+			return ""
 
 		if is_text_file(filename, self.read_file(filename, 512)):
 
@@ -682,6 +690,9 @@ class BaseXiki(
 				raise NotImplementedError("Unhandled system: %s" % platform.system())
 
 			return None
+
+	def close_file(self, filename):
+		return None
 
 	def get_project_dirs(self):
 		'''return root project directories. these are only the names, which

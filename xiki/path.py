@@ -476,5 +476,5 @@ class XikiPath:
 		context = self.context(context)
 		log.debug("close: %s <- %s", context, self)
 		if not isinstance(input, XikiInput):
-			input= XikiInput(input)
+			input = XikiInput(input)
 		return context.close(input=input)
