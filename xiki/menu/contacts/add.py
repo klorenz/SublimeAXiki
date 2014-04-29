@@ -9,12 +9,12 @@ def menu(ctx, input):
 			return ctx.write_file(d['email']+'.xiki', input)
 	else:
 		return ctx.snippet('''
-		first name: $1
-		last name : $2
-		email     : $3
-		mobile    : $4
-		storage   : ${5:user}
-		${0:[SUBMIT]}
+			first name: $1
+			last name : $2
+			email     : $3
+			mobile    : $4
+			storage   : ${5:user}
+			${0:[SUBMIT]}
 		''')
 
 from xiki.util import unindent

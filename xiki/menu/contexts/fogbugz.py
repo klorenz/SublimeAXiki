@@ -935,6 +935,9 @@ class fogbugz(XikiContext):
                 self.set_namespace(path[0])
                 path = path[1:]
 
+        if not path:
+            return False
+
         mob = CASE_RE.match(path[0])
         if mob:
             self.data = {}

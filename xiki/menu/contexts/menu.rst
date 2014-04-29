@@ -15,7 +15,10 @@ You have multiple opportunities to add active content to a menu.
 			menu_files = self.extensions()
 			result = set()
 			for k in menu_files:
-				result.add(os.path.splitext(k.split('/')[0])[0])
+				if k.startswith('/'):
+					result.add(k[1:])
+				else:
+					result.add(os.path.splitext(k.split('/')[0])[0])
 
 			return ''.join(sorted([x+"\n" for x in result if x]))
 

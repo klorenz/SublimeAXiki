@@ -1,1 +1,1 @@
-<< >>> help('xiki.core.XikiContext')
+<< >>> help('xiki.interface')

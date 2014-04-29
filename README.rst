@@ -27,7 +27,7 @@ Why a clone?
 aXiki Concept
 -------------
 
-If you are reading this from SublimeText, it is time to start Xikiing.
+If you are reading this document in SublimeText, it is time to start Xikiing.
 
 You have to remember only two keyboard shortcuts to get started:
 
@@ -37,10 +37,9 @@ You have to remember only two keyboard shortcuts to get started:
   corresponding handler.
 
 
-Knowing this, you are ready to hit ctrl+return on next line:
+Knowing this, you are ready to hit ``ctrl+return`` on next line:
 
 - help/concept — hit ``ctrl+enter`` here to read more about the concept
-
 
 
 

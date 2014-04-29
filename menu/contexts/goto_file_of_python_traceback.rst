@@ -12,20 +12,3 @@ This module lets you jump to a line of a file, displayed in a python traceback::
 			import sublime
 			g = self.mob.groupdict()
 			self.window.open_file("%(file)s:%(line)s:0" % g, sublime.ENCODED_POSITION)
-
-::
-
-	function foo() {
-		for 
-	}
-
-::
-
-	$ foo
-	  ! 'NoneType' object is not callable
-	$ ls
-	  ! xiki context not found for 
-
-::
-
-

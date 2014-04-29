@@ -25,6 +25,7 @@ def open(*path, **kwargs):
 			# 
 		return context.open_file(filename)
 
+	slashed_p = ""
 	if menu_path:
 		slashed_p = menu_path+'/'
 
@@ -43,6 +44,11 @@ def open(*path, **kwargs):
 			content = ""
 
 		filename = os.path.join(xiki.user_root, xiki.extension_dir, menu_path)
+		dirname = os.path.dirname(filename)
+		
+		if not xiki.exists(dirname):
+			xiki.makedirs(dirname)
+
 		return context.open_file(filename, content=content)
 
 	return ''.join(sorted(["- %s\n" % x for x in result if x]))

@@ -451,7 +451,10 @@ class XikiPath:
 				log.error("error querying context %s for doing %s", ctx, 
 					self, exc_info=1)
 
-	#def complete()
+	def complete(self, context, prefix, before="", after=""):
+		context = self.context(context)
+		log.debug("complete: %s, %s <- %s", prefix, context, self)
+		return context.complete(prefix, before=before, after=after)
 
 	def open(self, context, input=None, cont=False):
 		context = self.context(context)
@@ -461,14 +464,12 @@ class XikiPath:
 		if not isinstance(input, XikiInput):
 			input= XikiInput(input)
 
-		if input.action == 'bar':
-			import spdb ; spdb.start()
 		return context.open(input=input, cont=cont)
 
 	def expanded(self, context, input=None):
 		context = self.context(context)
 		if not isinstance(input, XikiInput):
-			input= XikiInput(input)
+			input = XikiInput(input)
 		log.debug("open: %s <- %s", context, self)
 		return context.expanded(input=input, cont=cont)
 

@@ -37,6 +37,12 @@
                 "operand": "$",
                 "operator": "regex_match",
                 "match_all": true
+            },
+            {
+                "key": "auto_complete_visible",
+                "operand": false,
+                "operator": "equal",
+                "match_all": true
             }
         ]
     },
