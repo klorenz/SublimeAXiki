@@ -56,11 +56,12 @@ class XikiSettings:
 class Snippet:
     def __init__(self, thing):
         if isinstance(thing, str):
-            self.snippet = [ unindent(thќing) ]
+            self.snippet = [ unindent(thing) ]
 
-    def indented(self):
+    def indented(self, indent=""):
         s = str(self)
-        s = "\t"+''.join([ "\t"+l for l in s.splitlines(1) ])
+        indent = indent.replace(INDENT, "\t")
+        s = ''.join([ indent+"\t"+l for l in s.splitlines(1) ])
         print("s: %s" % repr(s))
         s = s.rstrip() + "\n"
         return s
@@ -71,11 +72,14 @@ class Snippet:
     def __iter__(self):
         yield str(self)
 
+
 class XikiError(Exception):
     pass
 
+
 class XikiFileAlreadyExists(XikiError):
     pass
+
 
 class XikiLookupError(XikiError):
     pass
@@ -519,10 +523,18 @@ class BaseXiki(
 
     def get_setting(self, name, default=None, namespace=None, layer=None):
         settings = self.get_data("settings/%s" % namespace, default={})
+
+        if not settings:
+            return default
+
         return settings.get(name, default)
 
     def set_setting(self, name, value, namespace=None, layer=None):
         settings = self.get_data("settings/%s" % namespace, default={})
+
+        if not settings:
+            settings = {}
+
         settings[name] = value
         self.put_data("settings/%s" % namespace, settings, overwrite=True)
 
@@ -561,7 +573,7 @@ class BaseXiki(
 
     def parse_data(self, string):
         from .parser import parse
-        return parse(string)
+        return parse(str(string))
 
     def assemble_data(self, data):
         from .parser import assemble
@@ -578,21 +590,36 @@ class BaseXiki(
 
         path = self.expand_dir(storage)
 
-        print("path: %s" % path)
-
         menu_dir = os.path.join(path, type)
         if not self.exists(menu_dir):
             self.makedirs(menu_dir)
 
         return menu_dir
 
+
+    def list_data(self, name, storage=None, type=None):
+        if type is None:
+            type = self.extension_dir
+
+        menu_dir = self._get_storage(storage, type)
+        path = menu_dir
+        if name:
+            name = str(name)
+            path = os.path.join(menu_dir, name)
+
+        return self.listdir(path)
+
+
     def put_data(self, name, data, storage=None, type=None, overwrite=False):
         if type is None:
             type = self.extension_dir
 
         menu_dir = self._get_storage(storage, type)
+        name     = str(name)
+        filepath = os.path.join(menu_dir, name)
 
-        filepath = os.path.join(menu_dir, str(name))
+        if not os.path.splitext(filepath)[1]:
+            filepath += self.default_extension
 
         if self.exists(filepath) and not overwrite:
             raise XikiFileAlreadyExists("File already exists: %s" % filepath)
@@ -604,6 +631,8 @@ class BaseXiki(
                 data = json.dumps(data)
 
         self.write_file(filepath, data)
+
+        return data
 
 
     def get_data(self, name, storage=None, type=None, default=None):

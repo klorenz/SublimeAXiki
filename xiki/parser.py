@@ -1,15 +1,25 @@
-import json
+import json, re, logging
+from .util import unindent
 
-WHITESPACE = r'\s+'
+log = logging.getLogger('xiki.parser')
 
-HANGING = r'(?m)\S.*\n([\x20\t]+\S.*\n|[\x20\t]*\n)*'
+WHITESPACE = re.compile(r'\s+')
+HANGING    = re.compile(r'(?m)\S.*\n([\x20\t]+\S.*\n|[\x20\t]*\n)*')
+KEY        = re.compile(r':?([^:]+):((?=\n)|[\x20\t]+)')
 
-KEY = r':?([^:]+):((?=\n)|[\x20\t]+)'
+try:
+    unicode('')
+except:
+    unicode = str
 
 
 def is_list(s):
     from .path import BULLET_RE
     return BULLET_RE.match(s)
+
+
+def is_dictionary(s):
+    return KEY.match(s)
 
 
 def syntax_error(message, lineno=None, filename=None):
@@ -20,6 +30,7 @@ def syntax_error(message, lineno=None, filename=None):
 
 
 def whitespace(s, lineno):
+    log.debug("s: %s", s)
     m = WHITESPACE.match(s)
     if m:
         lineno = m.group(0).count("\n")+1
@@ -51,6 +62,7 @@ def parse(input, data=None, lineno=1, filename=None):
     '''
 
     s = input
+    log.debug("parse s: %s", s)
 
     # remove "| " if present
     if s.startswith('| '):
@@ -58,15 +70,20 @@ def parse(input, data=None, lineno=1, filename=None):
 
     # JSON is fine
     try:
-        return json.load(s)
+        return json.loads(s)
     except:
         pass
 
     # skip whitespace
     s, lineno = whitespace(s, lineno)
 
+    log.debug("lineno: %s, s: %s", lineno, s)
+
+    result = s
+
     # parse list
     if is_list(s):
+        log.debug("is_list!")
 #       unindent(s[2:], hang=True)
         result = []
 
@@ -81,6 +98,7 @@ def parse(input, data=None, lineno=1, filename=None):
                 raise syntax_error("unexpected end of file: %s" % s, lineno=lineno)
 
             current, s = s[:m.end()], s[m.end():]
+            log.debug('current: %s, s: %s', current, s)
 
             current = current[1:]
             if current[0] in "\x20\t":
@@ -90,10 +108,12 @@ def parse(input, data=None, lineno=1, filename=None):
                 lineno += 1
 
             result.append(parse(unindent(current, hang=True), lineno=lineno))
-            line_no += current.count("\n")
+            lineno += current.count("\n")
+            log.debug("result: %s", result)
 
     # parse dictionary
     if is_dictionary(s):
+        log.debug("is_dict!")
         result = {}
 
         while s:
@@ -107,20 +127,30 @@ def parse(input, data=None, lineno=1, filename=None):
                 raise syntax_error("unexpected end of file: %s" % s.split("\n", 1)[0], lineno=lineno)
 
             current, s = s[:m.end()], s[m.end():]
+            log.debug('current: %s, s: %s', current, s)
 
             m = KEY.match(current)
             if not m:
                 raise syntax_error("key expected: %s" % s.split("\n", 1)[0], lineno=lineno)
 
             key = m.group(1).strip()
+            log.debug("key: %s", key)
             if current[m.end()] == "\n":
                 lineno += 1
             value = parse(unindent(current[m.end():], hang=True), lineno=lineno)
+            log.debug("value: %s", value)
 
             result[key] = value
 
+    if isinstance(result, bytes):
+        result = result.decode('utf-8')
+
     # else we keep this string
-    return s
+    if isinstance(result, unicode):
+        if result.count("\n") == 1:
+            return result.strip()
+
+    return result
 
 def assemble(input, data=None):
     output = ""

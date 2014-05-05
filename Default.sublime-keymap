@@ -14,6 +14,28 @@
         ]
     },
     {
+        "args": {},
+        "command": "xiki",
+        "keys": [
+            "enter"
+        ],
+        "context": [
+            {
+                "key": "setting.xiki",
+                "operand": true,
+                "operator": "equal",
+                "match_all": true
+            },
+            {
+                "key": "text",
+                "operator": "regex_match",
+                "operand": "\\[\\w+\\]",
+                "match_all": true
+            }
+        ]
+    },
+
+    {
         "args": {}, 
         "command": "xiki_continue", 
         "keys": [

@@ -57,7 +57,9 @@ Try this:
 			except:
 				import traceback
 				s = traceback.format_exc()
-				_output.write(s.decode('utf-8'))
+				if hasattr(s, 'decode'):
+					s = s.decode('utf-8')
+				_output.write(s)
 
 			finally:
 				sys.stderr = _stderr

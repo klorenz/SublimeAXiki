@@ -29,14 +29,16 @@ You have multiple opportunities to add active content to a menu.
 			if not xiki_path: return False
 
 			#xiki_path.split_elements()
+			import logging
+			log.setLevel(logging.DEBUG)
 
 			menu_files = self.extensions()
 
 			menu = None
-			i = len(xiki_path)
-			log.debug("xiki_path: %s, %s", i, xiki_path)
 
 			path = "/".join(xiki_path).split("/")
+			i = len(path)
+			log.debug("menu path: %s, %s", i, path)
 
 			while i > 0:
 			#	name = str(xiki_path[:i])
@@ -57,7 +59,7 @@ You have multiple opportunities to add active content to a menu.
 
 			self.menu = menu
 
-			if menu is not None:
+			if menu is not None[:
 				return True
 
 			if menu is None:

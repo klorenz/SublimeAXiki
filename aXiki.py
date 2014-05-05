@@ -751,8 +751,7 @@ class SublimeRequestXiki(SublimeXiki, ProxyXiki):
         t.start()
 
     def complete(self, prefix, before="", after=""):
-
-        return XikiPath(self.tree).complete(prefix, before=before, after=after)
+        return XikiPath(self.tree).complete(self, prefix, before=before, after=after)
 
 
 MULTISLASHES_RE = re.compile(r'//+')
@@ -792,6 +791,7 @@ class XikiHandlerThread(threading.Thread):
 
 
     def _handle_normal_enter(self):
+        #import spdb ; spdb.start()
         if not self.xiki.cont: return
 
         log.debug("Normal Enter")
@@ -1014,7 +1014,7 @@ class XikiHandlerThread(threading.Thread):
                 edit.erase(r)
 
         if isinstance(output, Snippet):
-            self._insert_snippet(output.indented())
+            self._insert_snippet(output.indented(indent))
 
         elif output:
             self.buffer = buf = []
@@ -1077,7 +1077,7 @@ class XikiListener(sublime_plugin.EventListener):
         if not is_xiki_buffer(view):
             return []
 
-        sys.stderr.write("prefix: %s, locations: %s\n" % (prefix, locations))
+        log.debug("prefix: %s, locations: %s", prefix, locations)
 
         loc = locations[0]
 
@@ -1141,12 +1141,12 @@ class XikiListener(sublime_plugin.EventListener):
         settings = view.settings()
         view_id = settings.get('xiki_activate_on_close')
 
-        print("view-id: %s" % view_id)
+        log.debug("view-id: %s", view_id)
 
         #window = view.window()
         window = sublime.active_window()
 
-        print("window: %s" % window)
+        log.debug("window: %s", window)
 
         if view_id:
             for view in window.views():

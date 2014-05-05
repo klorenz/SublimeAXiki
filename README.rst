@@ -41,7 +41,7 @@ Knowing this, you are ready to hit ``ctrl+return`` on next line:
 
 - help/concept — hit ``ctrl+enter`` here to read more about the concept
 
-
+- `docs/
 
 Random Notes
 ============

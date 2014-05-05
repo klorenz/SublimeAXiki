@@ -293,6 +293,9 @@ class SettingsInterface(Interface):
         if namespace is None:
             namespace=self.get_namespace()
 
+        if isinstance(self.SETTINGS, str):
+            import spdb ; spdb.start()
+
         _default = self.SETTINGS.get(name)
 
         if isinstance(_default, UserSetting):
