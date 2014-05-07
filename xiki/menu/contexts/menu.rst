@@ -155,6 +155,10 @@ You have multiple opportunities to add active content to a menu.
 
 			log.debug("run: %s(%s, %s)", menu_func.__name__, args, kwargs)
 			output = menu_func(*args, **kwargs)
+			if isinstance(output, str):
+				if output.startswith("\n"):
+					from xiki.util import unindent
+					output = unindent(output)
 
 			return output, xiki_path[argcount:]
 
@@ -170,11 +174,11 @@ You have multiple opportunities to add active content to a menu.
 					output, xiki_path = self._run_menu(input, cont, self.xiki_path, function=name)
 
 					if not isinstance(output, Snippet):
-						if not isinstance(output, str):
-							output = ''.join([x for x in output])
-
 						if not output:
 							return ''
+
+						if not isinstance(output, str):
+							output = ''.join([x for x in output])
 
 						from xiki.util import find_lines
 						return find_lines(self.context, output, xiki_path)

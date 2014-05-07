@@ -165,6 +165,9 @@ def find_lines(context, text, node_path):
 	insert_xiki_path = None
 	insert_input = None
 
+	# previous line on same level
+	last_same_line = ""
+
 	path_i = 0
 	i = -1
 	while i < len(lines):
