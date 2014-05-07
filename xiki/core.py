@@ -456,17 +456,6 @@ class BaseXiki(
 
         self.last_exit_code = {}
 
-        if platform.system() == 'Windows':
-            if "great" == self.execute_output("bash", "echo", "great").strip():
-                self.shell = ['bash', '-c']
-            else:
-                self.shell = ['cmd', '/c']
-
-            self.storage['home'] = os.path.expanduser('~/AppData/Roaming/axiki')
-        else:
-            self.shell = ['bash', '-c']
-            self.storage['home'] = os.path.expanduser('~/.config/axiki')
-
         op = os.path
         xiki_dir = op.abspath(op.join(op.dirname(__file__), '..'))
 
@@ -480,6 +469,17 @@ class BaseXiki(
         self._extensions       = XikiExtensions(self)
         self.encoding          = 'utf-8'
         self.lock              = threading.Lock()
+
+        if platform.system() == 'Windows':
+            if "great" == self.execute_output("bash", "echo", "great").strip():
+                self.shell = ['bash', '-c']
+            else:
+                self.shell = ['cmd', '/c']
+
+            self.storage['home'] = os.path.expanduser('~/AppData/Roaming/axiki')
+        else:
+            self.shell = ['bash', '-c']
+            self.storage['home'] = os.path.expanduser('~/.config/axiki')
 
     def lock_acquire(self):
         log.debug("acquire lock")
