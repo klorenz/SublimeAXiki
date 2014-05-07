@@ -259,6 +259,11 @@ class FileSystemInterface(Interface):
         :param path:
         '''
 
+    @dispatch
+    def tempfile(self, name, content):
+        """create a tempfile.
+        """
+
 
 class DataInterface(Interface):
     """This interface provides reader and writer for data."""

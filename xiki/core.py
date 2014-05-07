@@ -584,6 +584,7 @@ class BaseXiki(
             return True
         return False
 
+
     def _get_storage(self, storage, type):
         if storage is None:
             storage = self.default_storage
@@ -682,6 +683,13 @@ class BaseXiki(
 
     def get_xiki(self):
         return self
+
+    def tempfile(self, name, content):
+        import tempfile
+        x = tempfile.gettmpdir()
+        x = os.path.join(x, name)
+        self.write_file(name, content)
+        return x
 
 
     def cached_file(self, filename):

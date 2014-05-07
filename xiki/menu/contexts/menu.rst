@@ -59,7 +59,7 @@ You have multiple opportunities to add active content to a menu.
 
 			self.menu = menu
 
-			if menu is not None[:
+			if menu is not None:
 				return True
 
 			if menu is None:

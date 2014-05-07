@@ -176,6 +176,46 @@ class SublimeXiki(BaseXiki):
         else:
             BaseXiki.walk(self, path)
 
+    def dialog_input(self, caption, initial_text="", on_done=None, 
+        on_change = None, on_cancel=None):
+
+        L = dict(
+            is_done = False,
+            result  = None,
+            )
+
+        def _done(s):
+            try:
+                sys.stderr.write("done\n")
+                if on_done:
+                    on_done(s)
+            finally:
+                sys.stderr.write("result: %s\n" % L)
+                L['result']  = s
+                L['is_done'] = True
+                sys.stderr.write("result: %s\n" % L)
+
+        def _cancel():
+            try:
+                if on_cancel:
+                    on_canel()
+            finally:
+                L['is_done'] = True
+
+        sip = sublime.active_window().show_input_panel
+        sip(caption, initial_text, _done, on_change, _cancel)
+
+        counter = 1
+        while not L['is_done']:
+            sys.stderr.write("waiting: %s\n" % L)
+            time.sleep(1)
+            if counter >= 10:
+                break
+            counter += 1
+
+        return L['result']
+
+
     # def _setting_name(self, name, namespace):
     #   var_name = 'xiki.'
     #   if namespace: 
