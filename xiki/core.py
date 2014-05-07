@@ -457,7 +457,7 @@ class BaseXiki(
         self.last_exit_code = {}
 
         if platform.system() == 'Windows':
-            if "great" == self.exec_output("bash", "echo", "great").strip():
+            if "great" == self.execute_output("bash", "echo", "great").strip():
                 self.shell = ['bash', '-c']
             else:
                 self.shell = ['cmd', '/c']
