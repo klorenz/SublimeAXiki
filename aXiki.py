@@ -28,10 +28,12 @@ log = logging.getLogger('xiki')
 log.setLevel(logging.ERROR)
 log = logging.getLogger('xiki.sublime-connector')
 
-root_logger = logging.getLogger()
-if not hasattr(root_logger, '_has_sublime_axiki_logger'):
-    root_logger.addHandler(logging.FileHandler("/tmp/sublime.log"))
-    root_logger._has_sublime_axiki_logger = True
+# root_logger = logging.getLogger()
+# if not hasattr(root_logger, '_has_sublime_axiki_logger'):
+#     import tempfile
+#     logfilename = os.path.join(tempfile.gettempdir(), 'sublime.log')
+#     root_logger.addHandler(logging.FileHandler(logfilename))
+#     root_logger._has_sublime_axiki_logger = True
 
 INDENTATION  = '  '
 backspace_re = re.compile('.\b')
