@@ -1024,7 +1024,23 @@ class XikiHandlerThread(threading.Thread):
             elif self.xiki.is_vintage(view):
                 view.run_command('enter_insert_mode', {})
 
+        tab_size = view.settings().get('tab_size')
+        translate_tabs_to_spaces = view.settings().get('translate_tabs_to_spaces')
+        auto_indent = view.settings().get('auto_indent')
+
+        view.settings().set('tab_size', 2)
+        view.settings().set('translate_tabs_to_spaces', True)
+        view.settings().set('auto_indent', False)
+
         view.run_command('insert_snippet', {'contents': contents})
+
+        def on_done():
+            view.settings().set('tab_size', tab_size)
+            view.settings().set('translate_tabs_to_spaces', translate_tabs_to_spaces)
+            view.settings().set('auto_indent', auto_indent)
+
+        sublime.set_timeout(on_done, 20)
+
 
 
     def _print_output(self, output):

@@ -2,6 +2,45 @@
 test
 
 sublime/settings
+  + Preferences
+  + Distraction Free
+  + Abacus
+  + AdvancedNewFile
+  + Anaconda
+  + C++
+  + CSS
+  + Character Table
+  + Diff
+  + E-Mail
+  + FindKeyConflicts
+  + Fogbugz
+  + Lisp
+  + Makefile Improved
+  + Minimap
+  + PHP
+  + Package Control
+  + Perl
+  + Plain text
+  + Python
+  + Regex Format Widget
+  + Regex Widget
+  + Ruby
+  + Shell Turtlestein
+  + Side Bar
+  + Sphinx Office
+  + Sublime Slim Configuration
+  + VintageousEx Cmdline
+  + Widget
+  + Widget - Ayin
+  + Widget - Nil
+  + XML
+  + Xiki
+  + Zeroed Config
+  + distraction_free_window
+  + reStructuredText
+  + reStructuredText Improved
+  + scope_hunter
+  + tmLang
 """
 
 def settings(*path, ctx=None, input=None):
@@ -25,13 +64,27 @@ def settings(*path, ctx=None, input=None):
 	prefs = prefedit.load_preferences()
 
 	if not path:
-		yield "- Preferences\n"
-		yield "- Distraction Free\n"
+		result = [ "Preferences", "Distraction Free" ]
 		for k in sorted(prefs.keys()):
 			if k not in ['Preferences', 'Distraction Free']:
-				yield "- %s\n" % k
+				result.append(k)
+
+		return [ "- %s\n" % k for k in result ]
 
 	from xiki.util import indent
+
+	def get_key_value(name, key):
+		platform_default = 'default_'+sublime.platform()
+		data = prefs[name]
+		for k in ('user', platform_default, 'default'):
+			if k not in data: continue
+			if key not in data[k]: continue
+
+			_data = data[k][key]
+			return Snippet(
+				indent(_data['description'], "| ") + "\n" +
+				"- ${1:%s}\n" % sublime.encode_value(_data['value'])
+				)
 
 	def list_data(name):
 		platform_default = 'default_'+sublime.platform()
@@ -42,13 +95,16 @@ def settings(*path, ctx=None, input=None):
 				if d not in data: continue
 				if k in data[d]:
 					_data = data[d][k]
-					yield "%s:\n%s\n" % (k, indent(_data['description'], "    | ")+"\n"+indent(sublime.encode_value(_data['value']), "    "))+"\n"
+					yield "- %s\n" % k
+					#yield "%s:\n%s\n" % (k, indent(_data['description'], "    | ")+"\n"+indent(sublime.encode_value(_data['value']), "    "))+"\n"
 					break
 
-	if len(path) == 1:
+	if len(path) == 2:
+		return get_key_value(*path)
+
+	elif len(path) == 1:
 		name = path[0]
-		for x in list_data(name):
-			yield x
+		return list_data(name)
 
 
 def install(package_name, ctx):
