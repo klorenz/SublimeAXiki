@@ -5,14 +5,10 @@ This context lets you browse directory trees.  Commands executed in this context
 
 Simply start a line with one of following: 
 
-	- ``/`` — for root
-	- ``~/`` — for home directory
-	- ``./`` — for directory of current view
-	- ``~PROJECT_NAME/`` — for a current project directory.
-
-You can find out your current Project directories: 
-
-	>>> xiki.get_project_dirs()
+- ``/`` — for root
+- ``~/`` — for home directory
+- ``./`` — for directory of current view
+- ``~PROJECT_NAME/`` — for a current project directory.
 
 ::
 

@@ -696,7 +696,7 @@ class BaseXiki(
         import tempfile
         x = tempfile.gettempdir()
         x = os.path.join(x, name)
-        self.write_file(name, content)
+        self.write_file(x, content)
         return x
 
 
