@@ -69,6 +69,44 @@ def get_main_group(window):
     log.debug("groups: %s, group: %s", result, group)
     return group
 
+def indented_region(view, region):
+    indent = get_indent(view, region)
+
+    line = view.line(region)
+
+    while True:
+        if line.begin() == 0:
+            break
+
+        new_line = view.line(line.begin()-1)
+
+        if new_line.begin() != new_line.end():
+            if not get_indent(view, new_line).startswith(indent):
+                break
+
+        line = new_line
+
+    start = line.begin()
+
+    line = view.line(region)
+
+    while True:
+        if line.end() >= view.size(): break
+        new_line = view.line(line.end()+1)
+
+        if new_line.begin() != new_line.end():
+            if not get_indent(view, new_line).startswith(indent):
+                break
+
+        line = new_line
+
+    end = line.end()
+
+    return sublime.Region(start, end+1)
+
+
+
+
 def show_panel(view, options, done, highlighted=None):
     sublime.set_timeout_async(lambda: view.window().show_quick_panel(options, done, 0, -1, highlighted), 10)
 
@@ -188,14 +226,14 @@ class SublimeXiki(BaseXiki):
 
         def _done(s):
             try:
-                sys.stderr.write("done\n")
+                #sys.stderr.write("done\n")
                 if on_done:
                     on_done(s)
             finally:
-                sys.stderr.write("result: %s\n" % L)
+                #sys.stderr.write("result: %s\n" % L)
                 L['result']  = s
                 L['is_done'] = True
-                sys.stderr.write("result: %s\n" % L)
+                #sys.stderr.write("result: %s\n" % L)
 
         def _cancel():
             try:
@@ -209,7 +247,7 @@ class SublimeXiki(BaseXiki):
 
         counter = 1
         while not L['is_done']:
-            sys.stderr.write("waiting: %s\n" % L)
+            #sys.stderr.write("waiting: %s\n" % L)
             time.sleep(1)
             if counter >= 10:
                 break
@@ -417,7 +455,7 @@ class SublimeXiki(BaseXiki):
 
         next_indent = get_indent(view, next_char)
         if next_indent.startswith(indent) and len(next_indent) > len(indent):
-            input = view.substr(view.indented_region(next_char))
+            input = view.substr(indented_region(view, next_char))
 
         forced_input = False
         if line.strip():
@@ -435,7 +473,7 @@ class SublimeXiki(BaseXiki):
                         #   indented is 
                         line_region = view.full_line(lr)
 
-                        r = view.indented_region(view.full_line(lr).end()+1)
+                        r = indented_region(view, view.full_line(lr).end()+1)
                         input = unindent(view.substr(r))
                         forced_input = True
 
@@ -569,7 +607,7 @@ class SublimeXiki(BaseXiki):
 
                 action = selstr[1:-1]
 
-                input_region = view.indented_region(line_region.begin())
+                input_region = indented_region(view, line_region.begin())
                 input_region = sublime.Region(input_region.begin(), line_region.begin())
                 input = XikiInput(
                     value  = unindent(view.substr(input_region)),
@@ -622,7 +660,7 @@ class SublimeXiki(BaseXiki):
 
             elif next_indent.startswith(indent) and len(next_indent) > len(indent):
                 if not input:
-                    r = view.indented_region(next_char.begin())
+                    r = indented_region(view, next_char.begin())
                     input = unindent(view.substr(r))
 
                 if handle_input:
@@ -1067,7 +1105,7 @@ class XikiHandlerThread(threading.Thread):
         next_indent = get_indent(view, next_char)
 
         if next_indent.startswith(indent) and len(next_indent) > len(indent):
-            r = view.indented_region(next_char.begin())
+            r = indented_region(view, next_char.begin())
             with Edit(view) as edit:
                 edit.erase(r)
 

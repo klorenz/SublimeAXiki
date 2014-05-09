@@ -11,6 +11,8 @@ def menu(name=None, context=None, input=None):
               ${3:[submit]}
             """)
 
+    from xiki.util import unindent
+
     result = unindent("""
     <title>Bookmarklet</title>
     <p>Click the link and try it out.  Then drag the link to your toolbar to 
@@ -18,10 +20,10 @@ def menu(name=None, context=None, input=None):
 
     <a href="javascript:
     (function(){
-    {}
+    %s
     })()
-    ">{}</a>
-    """).format(input, name)
+    ">%s</a>
+    """) % (input, name)
 
     path = xiki.tempfile("bookmarklet.html", content=result)
     import webbrowser

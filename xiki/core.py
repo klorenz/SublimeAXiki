@@ -99,6 +99,7 @@ def exec_code(code, globals=None, locals=None):
         #eval("exec code in globals, locals", frame.f_globals, frame.f_locals)
 
 class XikiExtensions:
+    UNDERLINE = re.compile(r'([=\-"@\'])\1+\n')
 
     def __init__(self, xiki):
         self.nodes = {}
@@ -152,11 +153,15 @@ class XikiExtensions:
                 title = title[:-1]
 
         if doc:
-            if doc[0].isalnum():
+            m = self.UNDERLINE.match(doc)
+            if m:
+                doc = doc[m.end()-1:]
+                # here we could assert that length of match is like len of title
+
+            elif doc[0].isalnum():
                 title = name
                 doc = docstring
                 line = 0
-
 
         # elif doc[0] != "\n" and not doc[0].isalnum():
         #   doc = doc.split("\n", 1)[1]
@@ -294,9 +299,12 @@ class XikiExtensions:
                                 popped = []
                                 popped.append(menu.pop())
                                 popped.append(menu.pop())
+
                                 # and remove empty lines before
-                                while not menu[-1].strip():
-                                    popped.append(menu.pop())
+                                if menu:
+                                    while not menu[-1].strip():
+                                        popped.append(menu.pop())
+                                        if not menu: break
 
                                 popped.reverse()
 
@@ -686,7 +694,7 @@ class BaseXiki(
 
     def tempfile(self, name, content):
         import tempfile
-        x = tempfile.gettmpdir()
+        x = tempfile.gettempdir()
         x = os.path.join(x, name)
         self.write_file(name, content)
         return x

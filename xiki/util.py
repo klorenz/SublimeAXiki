@@ -135,12 +135,13 @@ def indent(s, indent="", hang=False):
 			s = [y for y in s]
 		s = ''.join(s)
 
-	s = indent.join(s.splitlines(1))
+	s = ''.join([ l != "\n" and indent+l or l for l in s.splitlines(1)])
 
 	if hang:
-		return s
-	else:
-		return indent+s
+		if not s.startswith('\n'):
+			return s[len(indent):]
+
+	return s
 
 indent_lines = indent
 
@@ -311,11 +312,11 @@ def find_lines(context, text, node_path):
 				lines[i+1:i+2] = indent_lines(insert, indent).splitlines(1)
 			continue
 
-		if line.startswith('+'):
-			raise NotImplementedError("not yet implemented")
-			insert = XikiPath(line[2:].strip()).expanded(context)
-			lines[i:i+1] = [ indent + '-' + line[1:]+"\n"]
-			lines[i+1:i+2] = [ indent+INDENT+l for l in insert.splitlines(1) ]
+		# if line.startswith('+'):
+		# 	#raise NotImplementedError("not yet implemented")
+		# 	insert = XikiPath(line[2:].strip()).expanded(context)
+		# 	lines[i:i+1] = [ indent + '-' + line[1:]+"\n"]
+		# 	lines[i+1:i+2] = [ indent+INDENT+l for l in insert.splitlines(1) ]
 
 		if line[0] in '-@':
 			if len(indent) > len(indentation[-1]):

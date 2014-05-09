@@ -205,3 +205,9 @@ Maybe create some special workflow:
 	- "Mark" lines and then select an action for them
 	- or better create a selection -> turn it into a Mark
 	  and then do an action on selected items
+
+
+$ gnome-terminal -e "sudo apt-get install libreoffice"
+
+For windows we need something like download and execute for installing packages
+

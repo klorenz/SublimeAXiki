@@ -18,7 +18,7 @@ And on expansion, the command will be executed
 
 << test/second
 
-<< $ echo <<
+<< $ cat <<
 	This is input
 	for the echo
 	command.

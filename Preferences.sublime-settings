@@ -14,13 +14,8 @@
     //
     // File extensions, xiki is reading
     //
-    "xiki_file_extensions": [
-        "rst", 
-    //=
-    // Have Xiki Commands and Keys available in this buffer.
-    //
-        "xiki"
-    ], 
+    "xiki_file_extensions": [ "rst", "xiki", "markdown" ], 
+
     //=
     // Have Xiki Commands and Keys available in this buffer.
     //

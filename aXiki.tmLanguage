@@ -5,9 +5,10 @@
 	<key>fileTypes</key>
 	<array>
 		<string>xiki</string>
+		<string>.xiki</string>
 	</array>
 	<key>name</key>
-	<string>Xiki</string>
+	<string>aXiki</string>
 	<key>patterns</key>
 	<array>
 		<dict>
@@ -210,6 +211,6 @@
 	<key>scopeName</key>
 	<string>xiki</string>
 	<key>uuid</key>
-	<string>AF8D3707-011E-11E2-9804-705681C14B6F</string>
+	<string>a341a171-0c57-46ac-9b19-8606769a71bb</string>
 </dict>
 </plist>
