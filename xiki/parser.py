@@ -1,5 +1,5 @@
 import json, re, logging
-from .util import unindent
+from .util import unindent, indent
 
 log = logging.getLogger('xiki.parser')
 
@@ -38,7 +38,7 @@ def whitespace(s, lineno):
     return s, lineno
 
 
-def parse(input, data=None, lineno=1, filename=None):
+def parse(input, lineno=1, filename=None):
     '''Get a data tree out of s.
 
     Examples::
@@ -152,12 +152,11 @@ def parse(input, data=None, lineno=1, filename=None):
 
     return result
 
-def assemble(input, data=None):
+def assemble(data):
+#    import spdb ; spdb.start()
     output = ""
-    if isinstance(data, list):
-        for d in data:
-            output += '- '+indent(assemble(d), 2, True)
-    elif isinstance(data, dict):
+    import types
+    if isinstance(data, dict):
         # align keys
         out_data = []
         max_len  = 0
@@ -188,7 +187,14 @@ def assemble(input, data=None):
                 if not data.endswith("\n"):
                     return json.dumps(data)
             return data
-    else:
+    elif data is None or isinstance(data, (int, float)):
         return json.dumps(data)
+
+    else:
+        for d in data:
+            r = indent(assemble(d), 2, True)
+            if not r.endswith("\n"):
+                r += "\n"
+            output += '- '+r
 
     return output

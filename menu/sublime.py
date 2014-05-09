@@ -1,46 +1,6 @@
 """
-test
-
-sublime/settings
-  + Preferences
-  + Distraction Free
-  + Abacus
-  + AdvancedNewFile
-  + Anaconda
-  + C++
-  + CSS
-  + Character Table
-  + Diff
-  + E-Mail
-  + FindKeyConflicts
-  + Fogbugz
-  + Lisp
-  + Makefile Improved
-  + Minimap
-  + PHP
-  + Package Control
-  + Perl
-  + Plain text
-  + Python
-  + Regex Format Widget
-  + Regex Widget
-  + Ruby
-  + Shell Turtlestein
-  + Side Bar
-  + Sphinx Office
-  + Sublime Slim Configuration
-  + VintageousEx Cmdline
-  + Widget
-  + Widget - Ayin
-  + Widget - Nil
-  + XML
-  + Xiki
-  + Zeroed Config
-  + distraction_free_window
-  + reStructuredText
-  + reStructuredText Improved
-  + scope_hunter
-  + tmLang
+- settings — manage sublime settings
+- install — install a package
 """
 
 def settings(*path, ctx=None, input=None):

@@ -21,31 +21,3 @@ things.
 If you make a change at a line and you want to save current context, hit 
 
 
-Configuring other tools
-=======================
-
-:: 
-	fogbugz/
-		@ settings/
-			- username: kay
-			- password: some password
-			- url: https://fogbugz.moduleworks.com/fogbugz/api.asp
-
-		- .shell: 
-
-		- defaults/
-			- project: 
-
-		- q: here the query goes
-			- case 12345: here the title
-
-
-ideas:
-	- store on leave line
-	- store on collapse
-	- store on special store command
-	- preview on enter line (also for text files in IDE mode)
-
-
-
-

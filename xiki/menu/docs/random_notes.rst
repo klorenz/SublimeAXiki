@@ -6,8 +6,7 @@ This document contains sketches, ideas and other fragments — random notes!
 [ ] output in rst mode. This means if indentation increases, there must be
     inserted an empty line in output tree, such that it is rendered right.
 
-[ ] Add a "snippet" tag in menus
-    ::
+[ ] Add a "snippet" tag in menus ::
 
         - contacts
           * add
@@ -149,3 +148,60 @@ ideas:
   - preview on enter line (also for text files in IDE mode)
 
 
+TODO:
+	In a file browser:
+
+	if filename ends with /, then file is opened locally in xiki tree.
+
+	if a file is xmind, then xmind opener gets active and opens 
+
+
+add reminder tool:
+
+remind/
+  - list of current reminders
+  - me
+    + in 1h
+    - in half an hour
+      of: ${1:something}
+      [submit]
+    - in 2h
+    - today
+      at: 12:00
+    - tomorrow
+      at: 13:00
+
+    - tomorrow at 09:00
+    - tomorrow at 12:00
+
+
+  - 2014-04-13/some note
+    you will be reminded at
+
+
+
+		- 
+	- 1400
+	- 
+
+For sublime, I need following things:
+
+folders/
+	- migration/
+		- file1
+		- folder1/
+
+How to:
+	- rename a file
+	- duplicate a file
+	- copy a file
+	- move a file
+
+special action:
+	rename /foo/bar/glork /x/y/z (move)
+	duplicate /foo/bar/glork /x/y/z (copy)
+
+Maybe create some special workflow:
+	- "Mark" lines and then select an action for them
+	- or better create a selection -> turn it into a Mark
+	  and then do an action on selected items

@@ -142,8 +142,20 @@ class aXikiTest(BufferTest):
 
 			v('xiki', {}, 'cmd_ended'),
 
-			"\n",
 			"- foo\n"
 			"  + bar\n"
 			"  + glork\n"
 		)
+
+	test_09_expand_bug = (
+			"- python\n"
+			"  - sys\n"
+			"    + ve│rsion\n"
+			"      \n"
+			"- foo\n",
+
+			v('xiki', {}, 'cmd_ended'),
+
+			""
+		)
+

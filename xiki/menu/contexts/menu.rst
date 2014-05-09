@@ -178,6 +178,10 @@ You have multiple opportunities to add active content to a menu.
 							return ''
 
 						if not isinstance(output, str):
+							from xiki.parser import assemble
+							output = assemble(output)
+
+						if not isinstance(output, str):
 							output = ''.join([x for x in output])
 
 						from xiki.util import find_lines
