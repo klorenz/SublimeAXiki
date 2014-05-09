@@ -2,6 +2,14 @@
     {
         "args": {}, 
         "command": "xiki_ide", 
-        "caption": "Xiki IDE"
+        "caption": "aXiki IDE"
+    },
+    {
+        "command": "xiki_enable",
+        "caption": "aXiki: Enable Xiki for this View"
+    },
+    {
+        "command": "xiki_disable",
+        "caption": "aXiki: Disable Xiki for this View"
     }
 ]

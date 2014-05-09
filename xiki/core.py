@@ -350,6 +350,7 @@ class XikiExtensions:
             sys.modules[mod_base] = imp.new_module(mod_base)
 
         for path_name in self.xiki.walk(root):
+            print(path_name)
             node_name = path_name[root_len:]
             name, ext = os.path.splitext(os.path.basename(path_name))
             node_name = os.path.splitext(node_name)[0]

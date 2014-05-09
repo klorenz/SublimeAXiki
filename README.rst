@@ -1,9 +1,6 @@
 aXiki is a Xiki Clone
 =====================
 
-
-
-
 Why a clone?
 ------------
 
@@ -27,6 +24,9 @@ Why a clone?
   Text and Markdown.
 
 
+.. _SublimeXiki: https://github.com/lunixbochs/SublimeXiki
+
+
 aXiki Concept
 -------------
 
@@ -39,11 +39,11 @@ You have to remember only two keyboard shortcuts to get started:
 - ``ctrl+shift+enter`` — Re-Open a node and pass nested text as input to 
   corresponding handler.
 
+To start right here, run "aXiki: Enable Xiki for this View" from Command 
+Palette.
 
-Knowing this, you are ready to hit ``ctrl+return`` on next line:
+If you are ready, then hit ``ctrl+enter`` at next line:
 
-- help/concept — hit ``ctrl+enter`` here to read more about the concept
-
-- `docs/
+- `docs`
 
 

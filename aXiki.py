@@ -1332,3 +1332,17 @@ def plugin_loaded():
 def plugin_unloaded():
     if hasattr(sys.modules['__main__'], 'xiki'):
         delattr(sys.modules['__main__'], 'xiki')
+
+class XikiDisable(sublime_plugin.TextCommand):
+    def is_enabled(self):
+        return self.view.settings().get('xiki')
+
+    def run(self, edit):
+        self.view.settings().set('xiki', False)
+
+class XikiEnable(sublime_plugin.TextCommand):
+    def is_enabled(self):
+        return not self.view.settings().get('xiki')
+
+    def run(self, edit):
+        self.view.settings().set('xiki', True)
